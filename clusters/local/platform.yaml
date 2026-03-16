@@ -28,9 +28,36 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/zingolabs/devops
-    path: platform/topolvm
-    targetRevision: dev
+    repoURL: https://topolvm.github.io/topolvm
+    chart: topolvm
+    targetRevision: 15.5.0
+    helm:
+      releaseName: topolvm
+      valueFiles: []
+      values: |
+        lvmd:
+          managed: true
+          deviceClasses:
+            - name: thin
+              volume-group: data_vg
+              type: thin
+              thin-pool:
+                name: thinpool
+                overprovision-ratio: 5.0
+              default: true
+        storageClasses:
+          - name: topolvm-thin
+            storageClass:
+              isDefaultClass: true
+              volumeBindingMode: WaitForFirstConsumer
+              allowVolumeExpansion: true
+              additionalParameters:
+                topolvm.io/device-class: thin
+        snapshotClasses:
+          - name: topolvm-snapshot
+            snapshotClass:
+              isDefaultClass: true
+              deletionPolicy: Retain
   destination:
     server: https://kubernetes.default.svc
     namespace: topolvm-system
@@ -50,9 +77,11 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/zingolabs/devops
-    path: platform/kanister
-    targetRevision: dev
+    repoURL: https://charts.kanister.io
+    chart: kanister-operator
+    targetRevision: 0.111.0
+    helm:
+      releaseName: kanister
   destination:
     server: https://kubernetes.default.svc
     namespace: kanister
