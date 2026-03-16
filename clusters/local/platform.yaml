@@ -35,6 +35,8 @@ spec:
       releaseName: topolvm
       valueFiles: []
       values: |
+        cert-manager:
+          enabled: false
         lvmd:
           managed: true
           deviceClasses:
