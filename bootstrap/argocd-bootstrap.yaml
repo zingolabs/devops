@@ -1,0 +1,26 @@
+# Root Application - App of Apps pattern
+# Applied by the bootstrap scripts after ArgoCD is installed
+#
+# This points ArgoCD at the clusters/production directory,
+# which contains Application manifests for all components.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/zingolabs/devops
+    targetRevision: main
+    path: clusters/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

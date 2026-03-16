@@ -1,0 +1,23 @@
+# Root Application for local development
+# Points ArgoCD at clusters/local directory, tracking dev branch
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/zingolabs/devops
+    targetRevision: dev
+    path: clusters/local
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

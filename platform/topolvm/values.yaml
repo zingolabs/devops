@@ -1,0 +1,29 @@
+# TopoLVM configuration
+# Points to the LVM thin pool we created
+
+lvmd:
+  managed: true
+  deviceClasses:
+    - name: thin
+      volume-group: data_vg
+      type: thin
+      thin-pool:
+        name: thinpool
+        overprovision-ratio: 5.0
+      default: true
+
+storageClasses:
+  - name: topolvm-thin
+    storageClass:
+      isDefaultClass: true
+      volumeBindingMode: WaitForFirstConsumer
+      allowVolumeExpansion: true
+      additionalParameters:
+        topolvm.io/device-class: thin
+
+# Snapshot class for CSI snapshots
+snapshotClasses:
+  - name: topolvm-snapshot
+    snapshotClass:
+      isDefaultClass: true
+      deletionPolicy: Retain

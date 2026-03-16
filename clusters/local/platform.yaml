@@ -1,0 +1,64 @@
+# Platform components for local development
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: snapshot-controller
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/zingolabs/devops
+    path: platform/snapshot-controller
+    targetRevision: dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: topolvm
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/zingolabs/devops
+    path: platform/topolvm
+    targetRevision: dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: topolvm-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kanister
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/zingolabs/devops
+    path: platform/kanister
+    targetRevision: dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kanister
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

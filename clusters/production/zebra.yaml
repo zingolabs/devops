@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zebra-mainnet
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/zingolabs/devops
+    path: apps/zebra/mainnet
+    targetRevision: main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: zebra
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zebra-testnet
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/zingolabs/devops
+    path: apps/zebra/testnet
+    targetRevision: main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: zebra
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
