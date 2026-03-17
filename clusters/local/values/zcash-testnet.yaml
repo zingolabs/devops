@@ -22,6 +22,10 @@ zaino:
   replicas: 1
   rpcService: zebra-testnet
   storageClassName: topolvm-thin
+  image:
+    repository: zingodevops/zaino
+    tag: 0.2.0-rc.4
+    pullPolicy: IfNotPresent
   volumes:
     data:
       size: 150Gi
