@@ -21,6 +21,7 @@ zaino:
   name: zaino-testnet
   replicas: 1
   rpcService: zebra-testnet
+  storageClassName: topolvm-thin
   volumes:
     data:
       size: 150Gi

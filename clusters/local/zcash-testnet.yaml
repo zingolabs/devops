@@ -7,9 +7,9 @@ metadata:
 spec:
   project: default
   sources:
-    # Helm chart (ECC repo moved to zodl-inc)
-    - repoURL: https://github.com/zodl-inc/zcash-stack
-      path: .
+    # Helm chart from zingolabs fork
+    - repoURL: https://github.com/zingolabs/zcash-stack
+      path: charts/zcash-stack
       targetRevision: main
       helm:
         releaseName: zcash-testnet
