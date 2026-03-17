@@ -21,9 +21,5 @@ storageClasses:
       additionalParameters:
         topolvm.io/device-class: thin
 
-# Snapshot class for CSI snapshots
-snapshotClasses:
-  - name: topolvm-snapshot
-    snapshotClass:
-      isDefaultClass: true
-      deletionPolicy: Retain
+# Note: VolumeSnapshotClass is created via snapshot-controller kustomization
+# (snapshotClasses is not a valid TopoLVM chart option)

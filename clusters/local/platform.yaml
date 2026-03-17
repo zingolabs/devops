@@ -80,11 +80,6 @@ spec:
               allowVolumeExpansion: true
               additionalParameters:
                 topolvm.io/device-class: thin
-        snapshotClasses:
-          - name: topolvm-snapshot
-            snapshotClass:
-              isDefaultClass: true
-              deletionPolicy: Retain
   destination:
     server: https://kubernetes.default.svc
     namespace: topolvm-system

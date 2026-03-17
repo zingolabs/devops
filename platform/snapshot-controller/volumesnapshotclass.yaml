@@ -1,0 +1,9 @@
+# VolumeSnapshotClass for TopoLVM CSI driver
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: topolvm-snapshot
+  annotations:
+    snapshot.storage.kubernetes.io/is-default-class: "true"
+driver: topolvm.io
+deletionPolicy: Retain
