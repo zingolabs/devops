@@ -4,7 +4,7 @@ kind: Kustomization
 helmCharts:
   - name: kanister-operator
     repo: https://charts.kanister.io
-    version: 0.111.0
+    version: 0.118.0
     releaseName: kanister
     namespace: kanister
     valuesFile: values.yaml
