@@ -62,6 +62,8 @@ spec:
       releaseName: topolvm
       valueFiles: []
       values: |
+        controller:
+          replicaCount: 1
         lvmd:
           managed: true
           deviceClasses:
