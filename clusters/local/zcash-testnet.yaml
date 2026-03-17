@@ -1,0 +1,61 @@
+# Zcash testnet - Zebra + Zaino
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zcash-testnet
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Electric-Coin-Company/zcash-stack
+    path: charts/zcash-stack
+    targetRevision: main
+    helm:
+      releaseName: zcash-testnet
+      values: |
+        ingress:
+          enabled: false
+
+        zebra:
+          enabled: true
+          name: zebra-testnet
+          testnet: true
+          replicas: 1
+          storageClassName: topolvm-thin
+          volumes:
+            data:
+              size: 20Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            memory: 4Gi
+
+        zaino:
+          enabled: true
+          name: zaino-testnet
+          replicas: 1
+          rpcService: zebra-testnet
+          volumes:
+            data:
+              size: 150Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            memory: 8Gi
+
+        lightwalletd:
+          enabled: false
+
+        zcashd:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: zcash
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
