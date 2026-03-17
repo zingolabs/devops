@@ -25,6 +25,7 @@ zaino:
   image:
     repository: zingodevops/zaino
     tag: 0.2.0-rc.4
+    hash: ""
     pullPolicy: IfNotPresent
   volumes:
     data:
