@@ -1,0 +1,17 @@
+# Example ActionSet to create a snapshot of zcash-testnet
+# Apply with: kubectl apply -f actionset-backup-testnet.yaml
+# Monitor with: kubectl -n kanister get actionsets -w
+apiVersion: cr.kanister.io/v1alpha1
+kind: ActionSet
+metadata:
+  generateName: backup-zcash-testnet-
+  namespace: kanister
+spec:
+  actions:
+    - name: backup
+      blueprint: zcash-stack
+      object:
+        apiVersion: v1
+        kind: ConfigMap
+        name: zcash-testnet-kanister
+        namespace: zcash

@@ -8,3 +8,6 @@ helmCharts:
     releaseName: kanister
     namespace: kanister
     valuesFile: values.yaml
+
+resources:
+  - blueprints/zcash-stack.yaml

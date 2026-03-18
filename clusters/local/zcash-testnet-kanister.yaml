@@ -1,0 +1,27 @@
+# Kanister target ConfigMap for zcash-testnet
+# This ConfigMap provides metadata for Kanister ActionSets to reference
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zcash-testnet-kanister
+  namespace: zcash
+  labels:
+    app.kubernetes.io/name: zcash-testnet
+    app.kubernetes.io/managed-by: kanister
+    zcash-stack/network: testnet
+  annotations:
+    # StatefulSet names for the blueprint to reference
+    zcash-stack/zebra-statefulset: zebra-testnet
+    zcash-stack/zaino-statefulset: zaino-testnet
+    # PVC names for backup (actual PVC names from StatefulSet volumeClaimTemplates)
+    zcash-stack/zebra-pvc: zebra-testnet-data-zebra-testnet-0
+    zcash-stack/zaino-pvc: data-zaino-testnet-0
+    # Restore settings
+    zcash-stack/restore-zebra-pvc: zebra-restored
+    zcash-stack/restore-zaino-pvc: zaino-restored
+    zcash-stack/zebra-size: "20Gi"
+    zcash-stack/zaino-size: "150Gi"
+data:
+  network: testnet
+  zebra-service: zebra-testnet
+  zaino-service: zaino-testnet
