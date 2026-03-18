@@ -6,6 +6,12 @@ metadata:
   namespace: argocd
 spec:
   project: default
+  # Let Kanister control replicas during snapshot operations
+  ignoreDifferences:
+  - group: apps
+    kind: StatefulSet
+    jsonPointers:
+    - /spec/replicas
   sources:
     # Helm chart from zingolabs fork
     - repoURL: https://github.com/zingolabs/zcash-stack
