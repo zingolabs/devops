@@ -101,11 +101,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://charts.kanister.io
-    chart: kanister-operator
-    targetRevision: 0.118.0
-    helm:
-      releaseName: kanister
+    repoURL: https://github.com/zingolabs/devops
+    path: platform/kanister
+    targetRevision: dev
   destination:
     server: https://kubernetes.default.svc
     namespace: kanister
