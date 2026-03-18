@@ -1,0 +1,24 @@
+# ActionSet to snapshot zcash-testnet (zebra + zaino)
+#
+# Create:  kubectl create -f actionset-snapshot-testnet.yaml
+# Monitor: kubectl -n kanister get actionsets -w
+# Logs:    kubectl -n kanister logs -l app=kanister-kanister-operator -f
+#
+apiVersion: cr.kanister.io/v1alpha1
+kind: ActionSet
+metadata:
+  generateName: snapshot-testnet-
+  namespace: kanister
+spec:
+  actions:
+    - name: backup
+      blueprint: zcash-stack
+      object:
+        apiVersion: apps/v1
+        kind: StatefulSet
+        name: zebra-testnet
+        namespace: zcash
+      options:
+        zebraPvc: zebra-testnet-data-zebra-testnet-0
+        zainoPvc: data-zaino-testnet-0
+        network: testnet

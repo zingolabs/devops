@@ -1,5 +1,16 @@
 # Kanister Blueprint for zcash-stack (Zebra + Zaino) snapshots
 # Creates coordinated VolumeSnapshots with minimal downtime
+#
+# Target: Zebra StatefulSet
+# Options (passed via ActionSet):
+#   - zainoPvc: PVC to snapshot for zaino
+#   - zebraPvc: PVC to snapshot for zebra
+#   - network: testnet/mainnet (for labeling)
+#
+# Note: Zaino is NOT scaled down. While zebra is down, zaino will error
+# but won't be writing data, making the snapshot consistent.
+# This avoids needing to know about all zainos depending on a zebra.
+#
 apiVersion: cr.kanister.io/v1alpha1
 kind: Blueprint
 metadata:
@@ -17,56 +28,40 @@ actions:
           name: "{{ .Phases.snapshotZaino.Output.name }}"
           namespace: "{{ .Object.metadata.namespace }}"
     phases:
-    # Phase 1: Scale down Zaino first (depends on Zebra)
-    - func: ScaleWorkload
-      name: scaleDownZaino
-      args:
-        namespace: "{{ .Object.metadata.namespace }}"
-        name: "{{ index .Object.metadata.annotations \"zcash-stack/zaino-statefulset\" }}"
-        kind: StatefulSet
-        replicas: 0
-    # Phase 2: Scale down Zebra
+    # Phase 1: Scale down Zebra
     - func: ScaleWorkload
       name: scaleDownZebra
       args:
         namespace: "{{ .Object.metadata.namespace }}"
-        name: "{{ index .Object.metadata.annotations \"zcash-stack/zebra-statefulset\" }}"
+        name: "{{ .Object.metadata.name }}"
         kind: StatefulSet
         replicas: 0
-    # Phase 3: Create Zebra VolumeSnapshot (CSI)
+    # Phase 2: Create Zebra VolumeSnapshot
     - func: CreateCSISnapshot
       name: snapshotZebra
       args:
         namespace: "{{ .Object.metadata.namespace }}"
-        pvc: "data-{{ index .Object.metadata.annotations \"zcash-stack/zebra-statefulset\" }}-0"
+        pvc: "{{ .Options.zebraPvc }}"
         snapshotClass: topolvm-snapshot
         labels:
           app.kubernetes.io/component: zebra
-          zcash-stack/network: "{{ index .Object.metadata.labels \"zcash-stack/network\" }}"
-    # Phase 4: Create Zaino VolumeSnapshot (CSI)
+          zcash-stack/network: "{{ .Options.network }}"
+    # Phase 3: Create Zaino VolumeSnapshot (zaino is idle while zebra is down)
     - func: CreateCSISnapshot
       name: snapshotZaino
       args:
         namespace: "{{ .Object.metadata.namespace }}"
-        pvc: "data-{{ index .Object.metadata.annotations \"zcash-stack/zaino-statefulset\" }}-0"
+        pvc: "{{ .Options.zainoPvc }}"
         snapshotClass: topolvm-snapshot
         labels:
           app.kubernetes.io/component: zaino
-          zcash-stack/network: "{{ index .Object.metadata.labels \"zcash-stack/network\" }}"
-    # Phase 5: Scale Zebra back up
+          zcash-stack/network: "{{ .Options.network }}"
+    # Phase 4: Scale Zebra back up (zaino recovers automatically)
     - func: ScaleWorkload
       name: scaleUpZebra
       args:
         namespace: "{{ .Object.metadata.namespace }}"
-        name: "{{ index .Object.metadata.annotations \"zcash-stack/zebra-statefulset\" }}"
-        kind: StatefulSet
-        replicas: 1
-    # Phase 6: Scale Zaino back up
-    - func: ScaleWorkload
-      name: scaleUpZaino
-      args:
-        namespace: "{{ .Object.metadata.namespace }}"
-        name: "{{ index .Object.metadata.annotations \"zcash-stack/zaino-statefulset\" }}"
+        name: "{{ .Object.metadata.name }}"
         kind: StatefulSet
         replicas: 1
 
@@ -75,24 +70,22 @@ actions:
     - zebraSnapshot
     - zainoSnapshot
     phases:
-    # Phase 1: Create PVC from Zebra snapshot
     - func: RestoreCSISnapshot
       name: restoreZebra
       args:
         namespace: "{{ .Object.metadata.namespace }}"
         name: "{{ .ArtifactsIn.zebraSnapshot.keyValue.name }}"
-        pvc: "{{ index .Object.metadata.annotations \"zcash-stack/restore-zebra-pvc\" }}"
+        pvc: "{{ .Options.restoreZebraPvc }}"
         storageClass: topolvm-thin
-        restoreSize: "{{ index .Object.metadata.annotations \"zcash-stack/zebra-size\" }}"
-    # Phase 2: Create PVC from Zaino snapshot
+        restoreSize: "{{ .Options.zebraSize }}"
     - func: RestoreCSISnapshot
       name: restoreZaino
       args:
         namespace: "{{ .Object.metadata.namespace }}"
         name: "{{ .ArtifactsIn.zainoSnapshot.keyValue.name }}"
-        pvc: "{{ index .Object.metadata.annotations \"zcash-stack/restore-zaino-pvc\" }}"
+        pvc: "{{ .Options.restoreZainoPvc }}"
         storageClass: topolvm-thin
-        restoreSize: "{{ index .Object.metadata.annotations \"zcash-stack/zaino-size\" }}"
+        restoreSize: "{{ .Options.zainoSize }}"
 
   delete:
     inputArtifactNames:
