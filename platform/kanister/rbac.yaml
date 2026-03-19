@@ -1,0 +1,41 @@
+# RBAC for Kanister to manage workloads and snapshots across namespaces
+#
+# Grants the Kanister operator permissions to:
+# - Scale StatefulSets/Deployments (for quiesce/resume)
+# - Create/manage VolumeSnapshots (for backup)
+# - Read PVCs (for snapshot source)
+#
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kanister-workload-manager
+rules:
+  # Scale workloads
+  - apiGroups: ["apps"]
+    resources: ["statefulsets", "deployments", "statefulsets/scale", "deployments/scale"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  # Manage snapshots
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots", "volumesnapshotcontents"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # Read PVCs
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  # Read pods (for KubeExec if needed)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kanister-workload-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kanister-workload-manager
+subjects:
+  - kind: ServiceAccount
+    name: kanister-kanister-operator
+    namespace: kanister
