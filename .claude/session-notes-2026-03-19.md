@@ -15,6 +15,17 @@
 
 ## Decisions
 
+### ArgoCD sync options for operator + CR pattern
+- **Decision:** Use both `sync-wave` AND `SkipDryRunOnMissingResource=true` for Kanister app
+- **Context:** Blueprint CRD is installed by Helm chart, but Blueprint resource is in same kustomization
+- **Problem:** ArgoCD validates ALL resources before applying ANY. Validation fails because CRD doesn't exist yet.
+- **Why sync-waves alone don't work:** Waves control application ORDER, but validation happens BEFORE any application
+- **Solution:**
+  - `sync-wave: "1"` on Blueprint → applies after Helm chart
+  - `SkipDryRunOnMissingResource=true` → skips validation for resources with missing CRDs
+- **Trade-off:** Typos in Blueprint won't be caught until wave 1 applies (minor - errors show immediately)
+- **ADR candidate:** Yes - this is a reusable pattern for any operator + CR deployment
+
 ### Zaino handling during zebra snapshots
 - **Decision:** Let zaino ride out brief zebra downtime during snapshots
 - **Rationale:** LVM thinpool snapshots are sub-second (metadata-only COW), doesn't justify orchestration complexity
