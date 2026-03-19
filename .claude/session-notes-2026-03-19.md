@@ -54,6 +54,37 @@
 - Zebra scaled 1→0→1, zaino reconnected after brief outage
 - Zaino had 5 restarts during zebra downtime (expected behavior)
 
+### Argo Workflows for snapshot orchestration
+- **Decision:** Use Argo Workflows as the orchestration layer for snapshot lifecycle
+- **Rationale:**
+  - Fits GitOps model (WorkflowTemplates are CRDs, managed by ArgoCD)
+  - Visual debugging when steps fail
+  - Reusable templates for multiple workflows (snapshot, export, restore)
+  - Better than CronJob+script for multi-step workflows with shared logic
+- **Workflows planned:**
+  - `snapshot-golden`: CronWorkflow - metrics → kanister → label
+  - `export-to-r2`: Workflow - tar.zst → sign → upload → update manifest
+- **Integration:** Deployed as ArgoCD app in platform, workflow definitions in git
+
+### Snapshot metadata timing
+- **Decision:** Query zebra metrics BEFORE quiesce (not after)
+- **Rationale:** Window between query and snapshot is milliseconds, acceptable accuracy
+- **No ephemeral pod needed** - just query running zebra, then scale down
+
+### Dynamic snapshot refs in GitOps
+- **Problem:** ArgoCD expects manifests in git, but VolumeSnapshot names are dynamic
+- **Research:** No built-in solution - all approaches need external tooling
+- **Open question:** What is the source of truth for "latest golden snapshot"?
+  - Labels on VolumeSnapshots? (query at runtime)
+  - Argo Workflows artifacts?
+  - External manifest (R2)?
+  - TBD - not yet decided
+
+### Future refactor: Separate deploy definitions from values
+- **Issue to create:** Refactor all platform apps to use kustomization + valuesFile pattern
+- **Why:** Currently mixing inline values in Application specs (cert-manager, topolvm) with path-based (kanister)
+- **Goal:** Consistent pattern across all apps - Application points to path, values live in separate file
+
 ## TODO for devlog
 - [ ] Document Kanister limitation finding
 - [ ] Document zaino-during-snapshot decision (ADR?)
