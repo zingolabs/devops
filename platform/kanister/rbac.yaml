@@ -1,24 +1,25 @@
-# RBAC for Kanister to manage workloads and snapshots across namespaces
+# RBAC for Kanister to manage workloads and snapshots
 #
-# Grants the Kanister operator permissions to:
-# - Scale StatefulSets/Deployments (for quiesce/resume)
-# - Create/manage VolumeSnapshots (for backup)
-# - Read PVCs (for snapshot source)
+# Following Kanister security best practices (GHSA-h27c-6xm3-mcqp):
+# - ClusterRole defines permissions once
+# - RoleBinding grants access per-namespace (principle of least privilege)
+#
+# To grant Kanister access to a new namespace, add a RoleBinding below.
 #
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: kanister-workload-manager
 rules:
-  # Scale workloads
+  # Scale workloads (ScaleWorkload function)
   - apiGroups: ["apps"]
     resources: ["statefulsets", "deployments", "statefulsets/scale", "deployments/scale"]
     verbs: ["get", "list", "watch", "patch", "update"]
-  # Manage snapshots
+  # Manage snapshots (CreateCSISnapshot function)
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshots", "volumesnapshotcontents"]
     verbs: ["get", "list", "watch", "create", "delete"]
-  # Read PVCs
+  # Read PVCs (snapshot source)
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "list", "watch"]
@@ -27,10 +28,12 @@ rules:
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
 ---
+# Grant Kanister access to zcash namespace
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
   name: kanister-workload-manager
+  namespace: zcash
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

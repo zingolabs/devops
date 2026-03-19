@@ -33,6 +33,27 @@
 - **Note:** If zaino proves fragile, fix zaino rather than add orchestration complexity
 - **ADR candidate:** Yes - document this decision formally
 
+### Kanister RBAC requirements
+- **Finding:** Default Kanister Helm chart RBAC only covers `cr.kanister.io` CRDs
+- **Problem:** Kanister can't scale workloads or create snapshots in other namespaces
+- **Research:** Kanister removed `edit` ClusterRole due to security advisory GHSA-h27c-6xm3-mcqp
+- **Official recommendation:** Use RoleBinding per namespace (not ClusterRoleBinding)
+- **Solution:**
+  - ClusterRole `kanister-workload-manager` defines permissions once
+  - RoleBinding in each namespace grants access (currently: `zcash`)
+- **Permissions granted:**
+  - `apps` StatefulSets/Deployments: get, list, watch, patch, update
+  - `snapshot.storage.k8s.io` VolumeSnapshots: get, list, watch, create, delete
+  - Core PVCs and Pods: get, list, watch
+- **To add new namespace:** Add another RoleBinding in rbac.yaml
+
+### Snapshot workflow test
+- **Result:** SUCCESS
+- Kanister ActionSet completed in ~30 seconds
+- VolumeSnapshots created with `READYTOUSE: true`
+- Zebra scaled 1→0→1, zaino reconnected after brief outage
+- Zaino had 5 restarts during zebra downtime (expected behavior)
+
 ## TODO for devlog
 - [ ] Document Kanister limitation finding
 - [ ] Document zaino-during-snapshot decision (ADR?)
