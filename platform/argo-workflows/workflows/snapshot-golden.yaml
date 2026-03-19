@@ -1,0 +1,183 @@
+# Golden Snapshot Workflow
+# Creates a coordinated snapshot of zebra + zaino with metadata
+#
+# Steps:
+# 1. Query zebra metrics for height and version
+# 2. Create Kanister ActionSet (quiesce → snapshot → resume)
+# 3. Wait for ActionSet to complete
+# 4. Unset 'latest' label from previous snapshots
+# 5. Label new VolumeSnapshots with metadata
+#
+# Label semantics:
+#   source=golden     - snapshot from golden (stable) deploy
+#   latest=true       - most recent snapshot (auto-rotated)
+#   promoted=true     - approved for R2 distribution (set manually)
+#
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: snapshot-golden
+  namespace: argo
+spec:
+  entrypoint: snapshot-with-metadata
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: network
+        value: testnet
+      - name: zebra-statefulset
+        value: zebra-testnet
+      - name: zebra-pvc
+        value: zebra-testnet-data-zebra-testnet-0
+      - name: zaino-pvc
+        value: data-zaino-testnet-0
+      - name: namespace
+        value: zcash
+
+  templates:
+    - name: snapshot-with-metadata
+      steps:
+        - - name: get-metrics
+            template: query-zebra-metrics
+        - - name: create-snapshot
+            template: trigger-kanister-backup
+            arguments:
+              parameters:
+                - name: height
+                  value: "{{steps.get-metrics.outputs.parameters.height}}"
+                - name: version
+                  value: "{{steps.get-metrics.outputs.parameters.version}}"
+        - - name: unset-previous-latest
+            template: unset-latest-label
+        - - name: label-snapshots
+            template: label-volumesnapshots
+            arguments:
+              parameters:
+                - name: height
+                  value: "{{steps.get-metrics.outputs.parameters.height}}"
+                - name: version
+                  value: "{{steps.get-metrics.outputs.parameters.version}}"
+                - name: zebra-snapshot
+                  value: "{{steps.create-snapshot.outputs.parameters.zebra-snapshot}}"
+                - name: zaino-snapshot
+                  value: "{{steps.create-snapshot.outputs.parameters.zaino-snapshot}}"
+
+    - name: query-zebra-metrics
+      container:
+        image: curlimages/curl:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            METRICS=$(curl -s http://zebra-{{workflow.parameters.network}}.{{workflow.parameters.namespace}}.svc:8080/)
+
+            # Extract version from zebrad_build_info{version="X.X.X"}
+            VERSION=$(echo "$METRICS" | grep 'zebrad_build_info{' | sed 's/.*version="\([^"]*\)".*/\1/')
+
+            # Extract height from state_checkpoint_finalized_block_height
+            HEIGHT=$(echo "$METRICS" | grep '^state_checkpoint_finalized_block_height ' | awk '{print $2}' | cut -d. -f1)
+
+            echo "Extracted: version=$VERSION, height=$HEIGHT"
+            echo -n "$VERSION" > /tmp/version
+            echo -n "$HEIGHT" > /tmp/height
+      outputs:
+        parameters:
+          - name: version
+            valueFrom:
+              path: /tmp/version
+          - name: height
+            valueFrom:
+              path: /tmp/height
+
+    - name: trigger-kanister-backup
+      inputs:
+        parameters:
+          - name: height
+          - name: version
+      resource:
+        action: create
+        manifest: |
+          apiVersion: cr.kanister.io/v1alpha1
+          kind: ActionSet
+          metadata:
+            generateName: golden-{{workflow.parameters.network}}-
+            namespace: kanister
+          spec:
+            actions:
+              - name: backup
+                blueprint: zcash-stack
+                object:
+                  apiVersion: apps/v1
+                  kind: StatefulSet
+                  name: {{workflow.parameters.zebra-statefulset}}
+                  namespace: {{workflow.parameters.namespace}}
+                options:
+                  zebraPvc: {{workflow.parameters.zebra-pvc}}
+                  zainoPvc: {{workflow.parameters.zaino-pvc}}
+                  network: {{workflow.parameters.network}}
+        successCondition: status.state == complete
+        failureCondition: status.state == failed
+      outputs:
+        parameters:
+          - name: zebra-snapshot
+            valueFrom:
+              jsonPath: '{.status.actions[0].artifacts.zebraSnapshot.keyValue.name}'
+          - name: zaino-snapshot
+            valueFrom:
+              jsonPath: '{.status.actions[0].artifacts.zainoSnapshot.keyValue.name}'
+
+    - name: unset-latest-label
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            echo "Removing 'latest' label from previous golden snapshots for {{workflow.parameters.network}}..."
+
+            # Find and unlabel previous latest snapshots for this network
+            kubectl label volumesnapshot -n {{workflow.parameters.namespace}} \
+              -l zcash-stack/source=golden,zcash-stack/network={{workflow.parameters.network}},zcash-stack/latest=true \
+              zcash-stack/latest- \
+              --overwrite 2>/dev/null || echo "No previous latest snapshots found"
+
+    - name: label-volumesnapshots
+      inputs:
+        parameters:
+          - name: height
+          - name: version
+          - name: zebra-snapshot
+          - name: zaino-snapshot
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+            echo "Labeling zebra snapshot: {{inputs.parameters.zebra-snapshot}}"
+            kubectl label volumesnapshot -n {{workflow.parameters.namespace}} \
+              {{inputs.parameters.zebra-snapshot}} \
+              zcash-stack/app=zebra \
+              zcash-stack/network={{workflow.parameters.network}} \
+              zcash-stack/source=golden \
+              zcash-stack/latest=true \
+              zcash-stack/height={{inputs.parameters.height}} \
+              zcash-stack/zebra-version={{inputs.parameters.version}} \
+              zcash-stack/timestamp=$TIMESTAMP \
+              --overwrite
+
+            echo "Labeling zaino snapshot: {{inputs.parameters.zaino-snapshot}}"
+            kubectl label volumesnapshot -n {{workflow.parameters.namespace}} \
+              {{inputs.parameters.zaino-snapshot}} \
+              zcash-stack/app=zaino \
+              zcash-stack/network={{workflow.parameters.network}} \
+              zcash-stack/source=golden \
+              zcash-stack/latest=true \
+              zcash-stack/height={{inputs.parameters.height}} \
+              zcash-stack/zebra-version={{inputs.parameters.version}} \
+              zcash-stack/timestamp=$TIMESTAMP \
+              --overwrite
+
+            echo "Done. Snapshots labeled as latest golden at height {{inputs.parameters.height}}"
