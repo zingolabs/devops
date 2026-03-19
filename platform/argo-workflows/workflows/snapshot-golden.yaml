@@ -154,7 +154,8 @@ spec:
         args:
           - |
             set -e
-            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            # Use underscore format for K8s label compatibility (no colons allowed)
+            TIMESTAMP=$(date -u +%Y-%m-%d_%H%M%SZ)
 
             echo "Labeling zebra snapshot: {{inputs.parameters.zebra-snapshot}}"
             kubectl label volumesnapshot -n {{workflow.parameters.namespace}} \
