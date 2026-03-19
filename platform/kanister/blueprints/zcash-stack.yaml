@@ -16,6 +16,8 @@ kind: Blueprint
 metadata:
   name: zcash-stack
   namespace: kanister
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 actions:
   backup:
     outputArtifacts:
