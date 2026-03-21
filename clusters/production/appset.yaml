@@ -1,0 +1,74 @@
+# Unified ApplicationSet for production cluster
+# Reads from both platform/defs/*.yaml and domain/defs/*.yaml
+# Handles two app types:
+#   - kustomize: path-based (default)
+#   - helm-git: multi-source helm from git repo
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cluster
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=zero"]
+  generators:
+    - git:
+        repoURL: https://github.com/zingolabs/devops
+        revision: main
+        files:
+          - path: "platform/defs/*.yaml"
+    - git:
+        repoURL: https://github.com/zingolabs/devops
+        revision: main
+        files:
+          - path: "domain/defs/*.yaml"
+  template:
+    metadata:
+      name: '{{.name}}'
+      namespace: argocd
+    spec:
+      project: default
+      {{- if eq .type "helm-git" }}
+      sources:
+        - repoURL: '{{.chartRepo}}'
+          path: '{{.chartPath}}'
+          targetRevision: '{{.chartRevision}}'
+          helm:
+            releaseName: '{{.name}}'
+            valueFiles:
+              - $values/{{ .valuesFile | replace "ENV" "production" }}
+        - repoURL: https://github.com/zingolabs/devops
+          targetRevision: main
+          ref: values
+      {{- else }}
+      source:
+        repoURL: https://github.com/zingolabs/devops
+        path: '{{.path}}'
+        targetRevision: main
+      {{- end }}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.namespace}}'
+      {{- with .ignoreDifferences }}
+      ignoreDifferences:
+        {{- range . }}
+        - group: {{ .group }}
+          kind: {{ .kind }}
+          jsonPointers:
+            {{- range .jsonPointers }}
+            - {{ . }}
+            {{- end }}
+        {{- end }}
+      {{- end }}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          {{- with .syncOptions }}
+          {{- range . }}
+          - {{ . }}
+          {{- end }}
+          {{- end }}

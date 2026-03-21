@@ -1,0 +1,6 @@
+name: kanister
+namespace: kanister
+path: platform/kanister
+syncOptions:
+  - ServerSideApply=true
+  - SkipDryRunOnMissingResource=true

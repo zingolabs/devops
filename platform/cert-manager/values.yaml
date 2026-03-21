@@ -1,0 +1,3 @@
+# cert-manager base values
+crds:
+  enabled: true
