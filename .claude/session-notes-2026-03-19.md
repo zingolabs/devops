@@ -199,3 +199,16 @@ clusters/
 - Old Applications created manually need deletion before ApplicationSet takeover
 - ApplicationSet expects to "own" Applications it creates
 - Clean migration: delete old Apps, apply new appset.yaml
+
+### Issues encountered
+
+#### Git file generator field collision
+- **Symptom:** Application source path showed `map[basename:defs ...]` instead of actual path
+- **Cause:** Git file generator creates automatic `.path` metadata field (directory containing file)
+- **Collision:** Our YAML files had custom `path` field for app source path
+- **Fix:** Rename to `sourcePath` in both defs/*.yaml and ApplicationSet template
+
+#### TopoLVM controller anti-affinity on single-node
+- **Symptom:** Controller pod stuck in Pending, "didn't match pod anti-affinity rules"
+- **Cause:** Chart defaults to 2 replicas with anti-affinity
+- **Fix:** Set `controller.replicaCount: 1` in values.yaml
