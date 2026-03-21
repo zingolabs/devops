@@ -1,6 +1,11 @@
 # TopoLVM configuration
 # Points to the LVM thin pool we created
 
+# Single-node cluster: only 1 controller replica
+# (default is 2 with anti-affinity, which can't schedule on 1 node)
+controller:
+  replicaCount: 1
+
 lvmd:
   managed: true
   deviceClasses:
