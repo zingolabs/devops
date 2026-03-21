@@ -85,7 +85,117 @@
 - **Why:** Currently mixing inline values in Application specs (cert-manager, topolvm) with path-based (kanister)
 - **Goal:** Consistent pattern across all apps - Application points to path, values live in separate file
 
+### snapshot-golden workflow - End-to-End Success
+
+**Status:** Working
+
+**Fixes applied:**
+1. **Zebra metrics port** (upstream fix in `zingolabs/zcash-stack`)
+   - Chart only exposed RPC port, not metrics
+   - ConfigMap already had `endpoint_addr = "0.0.0.0:8080"` configured
+   - StatefulSet exposed port 8080 when probes enabled
+   - **Gap:** Service didn't expose the port externally
+   - **Fix:** Added metrics port to `zebra-service.yaml` template
+
+2. **Argo Workflows RBAC for output parameters**
+   - Workflow steps that emit output parameters need `workflowtaskresults` API access
+   - **Error:** `workflowtaskresults.argoproj.io is forbidden`
+   - **Fix:** Added to ClusterRole:
+     ```yaml
+     - apiGroups: ["argoproj.io"]
+       resources: ["workflowtaskresults"]
+       verbs: ["create", "patch"]
+     ```
+   - Plus RoleBinding in `argo` namespace
+
+3. **K8s label timestamp format**
+   - Labels can't contain colons (`:`)
+   - **Bad:** `2026-03-19T21:04:50Z`
+   - **Good:** `2026-03-19_214050Z`
+   - **Fix:** `date -u +%Y-%m-%d_%H%M%SZ`
+
+**Workflow output verified:**
+```
+NAME                                                HEIGHT   VERSION   LATEST   TIMESTAMP
+data-zaino-testnet-0-snapshot-ms8jh                 854800   4.0.0     true     2026-03-19_214058Z
+zebra-testnet-data-zebra-testnet-0-snapshot-dqrkh   854800   4.0.0     true     2026-03-19_214058Z
+```
+
+**Lessons learned:**
+- Always check what the chart actually exposes vs what the container listens on
+- Argo Workflows needs explicit RBAC for task result reporting
+- K8s labels have strict character requirements - test with actual values
+
 ## TODO for devlog
 - [ ] Document Kanister limitation finding
 - [ ] Document zaino-during-snapshot decision (ADR?)
-- [ ] Any other insights from today's session
+- [x] Document snapshot-golden workflow fixes and success
+- [ ] Document GitOps repo restructure (ApplicationSet, platform/domain separation)
+
+---
+
+## 2026-03-21: GitOps Repo Restructure
+
+### Problem
+- Repetitive Application definitions across clusters (local vs production)
+- No clear separation between infrastructure (platform) and workloads (domain)
+- Branch-per-environment anti-pattern concerns
+- Manual promotion workflow unclear
+
+### Research
+- Compared Helm app-of-apps vs ApplicationSets
+- Community moving toward ApplicationSets for dynamic workloads
+- Standard pattern: directory-per-environment, not branch-per-environment
+- Kustomize can wrap Helm charts via `helmCharts` generator
+
+### Decisions
+
+#### Directory structure: `platform/` + `domain/`
+```
+platform/           # Infrastructure (cert-manager, topolvm, kanister, etc.)
+├── defs/           # App definitions read by ApplicationSet
+└── <app>/          # Kustomization + values per app
+
+domain/             # Workloads (zcash-stack)
+├── defs/           # App definitions read by ApplicationSet
+└── <app>/          # Kustomization + values per app
+
+clusters/
+├── local/
+│   ├── appset.yaml # Single entry point
+│   └── values/     # Environment overrides
+└── production/
+    ├── appset.yaml
+    └── values/
+```
+
+#### Unified ApplicationSet pattern
+- Single `appset.yaml` per cluster
+- Multiple generators: reads `platform/defs/*.yaml` + `domain/defs/*.yaml`
+- Two app types handled via template conditionals:
+  - `type: kustomize` (default) - path-based, for apps defined in devops repo
+  - `type: helm-git` - multi-source, for external charts in git repos
+- App-specific fields: `syncOptions`, `ignoreDifferences` passed through
+
+#### Branch strategy
+- `dev` branch → local cluster
+- `main` branch → production cluster
+- Same directory structure on both branches
+- Promotion = PR from dev to main
+
+#### Helm charts wrapped in Kustomize
+- External Helm charts (cert-manager, topolvm, argo-workflows) wrapped via `kustomization.yaml` with `helmCharts:`
+- Allows uniform path-based sourcing for all platform apps
+- Exception: zcash-stack chart is in git repo (not helm repo), uses `helm-git` type with multi-source
+
+### Files created/modified
+- `platform/defs/*.yaml` - App definitions
+- `platform/*/kustomization.yaml` - Helm wrappers for external charts
+- `domain/defs/zcash-testnet.yaml` - Domain app definition
+- `clusters/local/appset.yaml` - Unified ApplicationSet
+- `clusters/production/appset.yaml` - Production variant
+
+### Migration notes
+- Old Applications created manually need deletion before ApplicationSet takeover
+- ApplicationSet expects to "own" Applications it creates
+- Clean migration: delete old Apps, apply new appset.yaml

@@ -1,3 +1,3 @@
 name: cert-manager
 namespace: cert-manager
-path: platform/cert-manager
+sourcePath: platform/cert-manager
