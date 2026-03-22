@@ -5,7 +5,7 @@ zebra:
   enabled: true
   name: zebra-testnet
   testnet: true
-  replicas: 1
+  replicas: 0
   storageClassName: topolvm-thin
   volumes:
     data:
@@ -19,7 +19,7 @@ zebra:
 zaino:
   enabled: true
   name: zaino-testnet
-  replicas: 1
+  replicas: 0
   rpcService: zebra-testnet
   storageClassName: topolvm-thin
   image:
