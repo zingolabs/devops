@@ -6,3 +6,4 @@ resources:
   - snapshot-golden.yaml
   - deploy-ephemeral.yaml
   - cleanup-ephemeral.yaml
+  - ephemeral-values.yaml

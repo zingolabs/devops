@@ -1,13 +1,8 @@
 # Ephemeral Deploy Workflow
-# Creates a test deployment from a snapshot for validation
-#
-# Scenarios:
-#   pre-synced: Restore from latest snapshot, start at tip (minutes)
-#   fresh-sync: Empty PVCs, sync from scratch (hours/days)
+# Creates a test deployment from a snapshot using zcash-stack helm chart
 #
 # Usage:
-#   argo submit --from workflowtemplate/deploy-ephemeral \
-#     -p zaino-image=zingodevops/zaino:0.2.0-rc.4-no-tls \
+#   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
 #     -p namespace=ephemeral-test
 #
 apiVersion: argoproj.io/v1alpha1
@@ -22,15 +17,9 @@ spec:
     parameters:
       - name: namespace
         value: ephemeral-test
-      - name: network
-        value: testnet
-      - name: scenario
-        value: pre-synced  # pre-synced or fresh-sync
-      - name: zaino-image
-        value: zingodevops/zaino:0.2.0-rc.4-no-tls
-      - name: zebra-image
-        value: zfnd/zebra:v4.0.0
-      # For pre-synced scenario - hardcoded to latest labeled snapshots
+      - name: release-name
+        value: ephemeral
+      # Snapshots to restore from (must exist in zcash namespace)
       - name: zebra-snapshot
         value: zebra-testnet-data-zebra-testnet-0-snapshot-dqrkh
       - name: zaino-snapshot
@@ -41,21 +30,9 @@ spec:
       steps:
         - - name: create-namespace
             template: ensure-namespace
-        - - name: create-pvcs
-            template: create-pvcs-from-snapshot
-            when: "{{workflow.parameters.scenario}} == pre-synced"
-          - name: create-empty-pvcs
-            template: create-empty-pvcs
-            when: "{{workflow.parameters.scenario}} == fresh-sync"
-        - - name: deploy-zebra
-            template: deploy-zebra-statefulset
-        - - name: wait-zebra
-            template: wait-for-zebra
-        - - name: deploy-zaino
-            template: deploy-zaino-statefulset
-        - - name: wait-zaino
-            template: wait-for-zaino
-        - - name: report-ready
+        - - name: helm-install
+            template: helm-install
+        - - name: report
             template: report-endpoint
 
     - name: ensure-namespace
@@ -67,242 +44,27 @@ spec:
             kubectl create namespace {{workflow.parameters.namespace}} --dry-run=client -o yaml | kubectl apply -f -
             kubectl label namespace {{workflow.parameters.namespace}} zcash-stack/ephemeral=true --overwrite
 
-    - name: create-pvcs-from-snapshot
+    - name: helm-install
       container:
-        image: bitnami/kubectl:latest
+        image: alpine/helm:latest
         command: [sh, -c]
         args:
           - |
             set -e
-            echo "Creating PVCs from snapshots..."
-
-            cat <<EOF | kubectl apply -f -
-            apiVersion: v1
-            kind: PersistentVolumeClaim
-            metadata:
-              name: zebra-data
-              namespace: {{workflow.parameters.namespace}}
-            spec:
-              accessModes: [ReadWriteOnce]
-              storageClassName: topolvm-thin
-              dataSource:
-                name: {{workflow.parameters.zebra-snapshot}}
-                kind: VolumeSnapshot
-                apiGroup: snapshot.storage.k8s.io
-              resources:
-                requests:
-                  storage: 20Gi
-            ---
-            apiVersion: v1
-            kind: PersistentVolumeClaim
-            metadata:
-              name: zaino-data
-              namespace: {{workflow.parameters.namespace}}
-            spec:
-              accessModes: [ReadWriteOnce]
-              storageClassName: topolvm-thin
-              dataSource:
-                name: {{workflow.parameters.zaino-snapshot}}
-                kind: VolumeSnapshot
-                apiGroup: snapshot.storage.k8s.io
-              resources:
-                requests:
-                  storage: 150Gi
-            EOF
-
-            echo "Waiting for PVCs to be bound..."
-            kubectl wait pvc/zebra-data pvc/zaino-data \
-              -n {{workflow.parameters.namespace}} \
-              --for=jsonpath='{.status.phase}'=Bound \
-              --timeout=300s
-
-    - name: create-empty-pvcs
-      container:
-        image: bitnami/kubectl:latest
-        command: [sh, -c]
-        args:
-          - |
-            set -e
-            echo "Creating empty PVCs for fresh sync..."
-
-            cat <<EOF | kubectl apply -f -
-            apiVersion: v1
-            kind: PersistentVolumeClaim
-            metadata:
-              name: zebra-data
-              namespace: {{workflow.parameters.namespace}}
-            spec:
-              accessModes: [ReadWriteOnce]
-              storageClassName: topolvm-thin
-              resources:
-                requests:
-                  storage: 20Gi
-            ---
-            apiVersion: v1
-            kind: PersistentVolumeClaim
-            metadata:
-              name: zaino-data
-              namespace: {{workflow.parameters.namespace}}
-            spec:
-              accessModes: [ReadWriteOnce]
-              storageClassName: topolvm-thin
-              resources:
-                requests:
-                  storage: 150Gi
-            EOF
-
-    - name: deploy-zebra-statefulset
-      container:
-        image: bitnami/kubectl:latest
-        command: [sh, -c]
-        args:
-          - |
-            set -e
-            echo "Deploying zebra..."
-
-            cat <<EOF | kubectl apply -f -
-            apiVersion: v1
-            kind: Service
-            metadata:
-              name: zebra
-              namespace: {{workflow.parameters.namespace}}
-            spec:
-              selector:
-                app: zebra
-              ports:
-                - port: 18232
-                  name: rpc
-                - port: 8080
-                  name: metrics
-              clusterIP: None
-            ---
-            apiVersion: apps/v1
-            kind: StatefulSet
-            metadata:
-              name: zebra
-              namespace: {{workflow.parameters.namespace}}
-            spec:
-              serviceName: zebra
-              replicas: 1
-              selector:
-                matchLabels:
-                  app: zebra
-              template:
-                metadata:
-                  labels:
-                    app: zebra
-                spec:
-                  containers:
-                    - name: zebra
-                      image: {{workflow.parameters.zebra-image}}
-                      ports:
-                        - containerPort: 18232
-                        - containerPort: 8080
-                      volumeMounts:
-                        - name: data
-                          mountPath: /data/zebra
-                      env:
-                        - name: ZEBRA_CONF_PATH
-                          value: /data/zebra/zebrad.toml
-                      resources:
-                        requests:
-                          cpu: 500m
-                          memory: 1Gi
-                        limits:
-                          memory: 4Gi
-                  volumes:
-                    - name: data
-                      persistentVolumeClaim:
-                        claimName: zebra-data
-            EOF
-
-    - name: wait-for-zebra
-      container:
-        image: bitnami/kubectl:latest
-        command: [sh, -c]
-        args:
-          - |
-            echo "Waiting for zebra to be ready..."
-            kubectl rollout status statefulset/zebra \
-              -n {{workflow.parameters.namespace}} \
-              --timeout=600s
-
-    - name: deploy-zaino-statefulset
-      container:
-        image: bitnami/kubectl:latest
-        command: [sh, -c]
-        args:
-          - |
-            set -e
-            echo "Deploying zaino..."
-
-            cat <<EOF | kubectl apply -f -
-            apiVersion: v1
-            kind: Service
-            metadata:
-              name: zaino
-              namespace: {{workflow.parameters.namespace}}
-            spec:
-              selector:
-                app: zaino
-              ports:
-                - port: 8137
-                  name: grpc
-              clusterIP: None
-            ---
-            apiVersion: apps/v1
-            kind: StatefulSet
-            metadata:
-              name: zaino
-              namespace: {{workflow.parameters.namespace}}
-            spec:
-              serviceName: zaino
-              replicas: 1
-              selector:
-                matchLabels:
-                  app: zaino
-              template:
-                metadata:
-                  labels:
-                    app: zaino
-                spec:
-                  containers:
-                    - name: zaino
-                      image: {{workflow.parameters.zaino-image}}
-                      ports:
-                        - containerPort: 8137
-                      args:
-                        - --zebrad-uri
-                        - http://zebra.{{workflow.parameters.namespace}}.svc:18232
-                        - --listen-addr
-                        - 0.0.0.0:8137
-                        - --db-path
-                        - /data/zaino
-                      volumeMounts:
-                        - name: data
-                          mountPath: /data/zaino
-                      resources:
-                        requests:
-                          cpu: 500m
-                          memory: 1Gi
-                        limits:
-                          memory: 8Gi
-                  volumes:
-                    - name: data
-                      persistentVolumeClaim:
-                        claimName: zaino-data
-            EOF
-
-    - name: wait-for-zaino
-      container:
-        image: bitnami/kubectl:latest
-        command: [sh, -c]
-        args:
-          - |
-            echo "Waiting for zaino to be ready..."
-            kubectl rollout status statefulset/zaino \
-              -n {{workflow.parameters.namespace}} \
-              --timeout=600s
+            helm upgrade --install {{workflow.parameters.release-name}} \
+              oci://ghcr.io/zingolabs/zcash-stack/zcash-stack \
+              --namespace {{workflow.parameters.namespace}} \
+              -f /values/ephemeral-testnet.yaml \
+              --set zebra.volumes.data.dataSource.name={{workflow.parameters.zebra-snapshot}} \
+              --set zaino.volumes.data.dataSource.name={{workflow.parameters.zaino-snapshot}} \
+              --wait --timeout 10m
+        volumeMounts:
+          - name: values
+            mountPath: /values
+      volumes:
+        - name: values
+          configMap:
+            name: ephemeral-values
 
     - name: report-endpoint
       container:
@@ -313,14 +75,9 @@ spec:
             echo "========================================"
             echo "Ephemeral deployment ready!"
             echo "========================================"
-            echo ""
             echo "Namespace: {{workflow.parameters.namespace}}"
-            echo "Scenario: {{workflow.parameters.scenario}}"
-            echo "Network: {{workflow.parameters.network}}"
-            echo ""
             echo "Zebra RPC: zebra.{{workflow.parameters.namespace}}.svc:18232"
             echo "Zaino gRPC: zaino.{{workflow.parameters.namespace}}.svc:8137"
             echo ""
             echo "To cleanup:"
-            echo "  kubectl delete namespace {{workflow.parameters.namespace}}"
-            echo ""
+            echo "  argo submit --from workflowtemplate/cleanup-ephemeral -p namespace={{workflow.parameters.namespace}}"
