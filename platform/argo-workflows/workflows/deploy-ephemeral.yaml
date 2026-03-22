@@ -51,8 +51,10 @@ spec:
         args:
           - |
             set -e
+            apk add --no-cache git
+            git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
             helm upgrade --install {{workflow.parameters.release-name}} \
-              oci://ghcr.io/zingolabs/zcash-stack/zcash-stack \
+              /tmp/zcash-stack/charts/zcash-stack \
               --namespace {{workflow.parameters.namespace}} \
               -f /values/ephemeral-testnet.yaml \
               --set zebra.volumes.data.dataSource.name={{workflow.parameters.zebra-snapshot}} \
