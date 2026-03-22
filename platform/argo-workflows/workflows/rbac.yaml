@@ -1,9 +1,11 @@
-# RBAC for Argo Workflows to manage snapshots
+# RBAC for Argo Workflows to manage snapshots and ephemeral deploys
 #
 # Grants workflows permission to:
 # - Create/watch Kanister ActionSets
 # - Label VolumeSnapshots
 # - Report workflow task results (Argo internal)
+# - Create/manage namespaces for ephemeral deploys
+# - Deploy zcash-stack via helm (statefulsets, services, etc.)
 #
 apiVersion: v1
 kind: ServiceAccount
@@ -29,14 +31,23 @@ rules:
   - apiGroups: ["argoproj.io"]
     resources: ["workflowtaskresults"]
     verbs: ["create", "patch"]
+  # Namespaces for ephemeral deploys
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["create", "get", "list", "patch", "delete"]
+  # Helm deploy resources
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets", "services", "persistentvolumeclaims"]
+    verbs: ["*"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets", "deployments"]
+    verbs: ["*"]
 
 ---
-# Bind to zcash namespace for VolumeSnapshots
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
   name: snapshot-workflow
-  namespace: zcash
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -46,34 +57,3 @@ subjects:
     name: snapshot-workflow
     namespace: argo
 
----
-# Bind to kanister namespace for ActionSets
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: snapshot-workflow
-  namespace: kanister
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: snapshot-workflow
-subjects:
-  - kind: ServiceAccount
-    name: snapshot-workflow
-    namespace: argo
-
----
-# Bind to argo namespace for workflow task results
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: snapshot-workflow
-  namespace: argo
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: snapshot-workflow
-subjects:
-  - kind: ServiceAccount
-    name: snapshot-workflow
-    namespace: argo
