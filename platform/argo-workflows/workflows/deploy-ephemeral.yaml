@@ -1,6 +1,11 @@
 # Ephemeral Deploy Workflow
 # Creates a test deployment from a snapshot using zcash-stack helm chart
 #
+# Cross-namespace snapshot restore:
+#   VolumeSnapshots are namespace-scoped, but VolumeSnapshotContent is cluster-scoped.
+#   We create new VolumeSnapshotContent + VolumeSnapshot pairs in the target namespace
+#   that reference the same underlying snapshotHandle from the source snapshots.
+#
 # Usage:
 #   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
 #     -p namespace=ephemeral-test
@@ -19,7 +24,10 @@ spec:
         value: ephemeral-test
       - name: release-name
         value: ephemeral
-      # Snapshots to restore from (must exist in zcash namespace)
+      # Source namespace where golden snapshots live
+      - name: source-namespace
+        value: zcash
+      # Snapshots to restore from (must exist in source-namespace)
       - name: zebra-snapshot
         value: zebra-testnet-data-zebra-testnet-0-snapshot-dqrkh
       - name: zaino-snapshot
@@ -30,6 +38,22 @@ spec:
       steps:
         - - name: create-namespace
             template: ensure-namespace
+        - - name: clone-zebra-snapshot
+            template: clone-snapshot
+            arguments:
+              parameters:
+                - name: source-snapshot
+                  value: "{{workflow.parameters.zebra-snapshot}}"
+                - name: target-snapshot
+                  value: "zebra-snapshot"
+          - name: clone-zaino-snapshot
+            template: clone-snapshot
+            arguments:
+              parameters:
+                - name: source-snapshot
+                  value: "{{workflow.parameters.zaino-snapshot}}"
+                - name: target-snapshot
+                  value: "zaino-snapshot"
         - - name: helm-install
             template: helm-install
         - - name: report
@@ -44,6 +68,87 @@ spec:
             kubectl create namespace {{workflow.parameters.namespace}} --dry-run=client -o yaml | kubectl apply -f -
             kubectl label namespace {{workflow.parameters.namespace}} zcash-stack/ephemeral=true --overwrite
 
+    - name: clone-snapshot
+      inputs:
+        parameters:
+          - name: source-snapshot
+          - name: target-snapshot
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            SOURCE_NS="{{workflow.parameters.source-namespace}}"
+            TARGET_NS="{{workflow.parameters.namespace}}"
+            SOURCE_SNAP="{{inputs.parameters.source-snapshot}}"
+            TARGET_SNAP="{{inputs.parameters.target-snapshot}}"
+
+            # Get the VolumeSnapshotContent name for the source snapshot
+            VSC_NAME=$(kubectl get volumesnapshot "$SOURCE_SNAP" -n "$SOURCE_NS" \
+              -o jsonpath='{.status.boundVolumeSnapshotContentName}')
+
+            if [ -z "$VSC_NAME" ]; then
+              echo "ERROR: Source snapshot $SOURCE_SNAP not bound to any VolumeSnapshotContent"
+              exit 1
+            fi
+
+            # Get snapshotHandle and other details from the VolumeSnapshotContent
+            SNAPSHOT_HANDLE=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
+              -o jsonpath='{.status.snapshotHandle}')
+            DRIVER=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
+              -o jsonpath='{.spec.driver}')
+            SNAPSHOT_CLASS=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
+              -o jsonpath='{.spec.volumeSnapshotClassName}')
+            RESTORE_SIZE=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
+              -o jsonpath='{.status.restoreSize}')
+
+            echo "Cloning snapshot:"
+            echo "  Source: $SOURCE_NS/$SOURCE_SNAP"
+            echo "  Target: $TARGET_NS/$TARGET_SNAP"
+            echo "  SnapshotHandle: $SNAPSHOT_HANDLE"
+            echo "  RestoreSize: $RESTORE_SIZE"
+
+            # Create new VolumeSnapshotContent pointing to target namespace
+            TARGET_VSC_NAME="${TARGET_SNAP}-content-${TARGET_NS}"
+            cat <<EOF | kubectl apply -f -
+            apiVersion: snapshot.storage.k8s.io/v1
+            kind: VolumeSnapshotContent
+            metadata:
+              name: ${TARGET_VSC_NAME}
+            spec:
+              deletionPolicy: Retain
+              driver: ${DRIVER}
+              source:
+                snapshotHandle: ${SNAPSHOT_HANDLE}
+              volumeSnapshotClassName: ${SNAPSHOT_CLASS}
+              volumeSnapshotRef:
+                apiVersion: snapshot.storage.k8s.io/v1
+                kind: VolumeSnapshot
+                name: ${TARGET_SNAP}
+                namespace: ${TARGET_NS}
+            EOF
+
+            # Create VolumeSnapshot in target namespace
+            cat <<EOF | kubectl apply -f -
+            apiVersion: snapshot.storage.k8s.io/v1
+            kind: VolumeSnapshot
+            metadata:
+              name: ${TARGET_SNAP}
+              namespace: ${TARGET_NS}
+            spec:
+              source:
+                volumeSnapshotContentName: ${TARGET_VSC_NAME}
+              volumeSnapshotClassName: ${SNAPSHOT_CLASS}
+            EOF
+
+            # Wait for snapshot to be ready
+            echo "Waiting for snapshot to be ready..."
+            kubectl wait volumesnapshot "$TARGET_SNAP" -n "$TARGET_NS" \
+              --for=jsonpath='{.status.readyToUse}'=true --timeout=60s
+
+            echo "Snapshot $TARGET_SNAP ready in $TARGET_NS"
+
     - name: helm-install
       container:
         image: alpine/helm:latest
@@ -57,8 +162,8 @@ spec:
               /tmp/zcash-stack/charts/zcash-stack \
               --namespace {{workflow.parameters.namespace}} \
               -f /values/ephemeral-testnet.yaml \
-              --set zebra.volumes.data.dataSource.name={{workflow.parameters.zebra-snapshot}} \
-              --set zaino.volumes.data.dataSource.name={{workflow.parameters.zaino-snapshot}} \
+              --set zebra.volumes.data.dataSource.name=zebra-snapshot \
+              --set zaino.volumes.data.dataSource.name=zaino-snapshot \
               --wait --timeout 10m
         volumeMounts:
           - name: values

@@ -23,10 +23,14 @@ rules:
   - apiGroups: ["cr.kanister.io"]
     resources: ["actionsets"]
     verbs: ["create", "get", "watch", "list"]
-  # VolumeSnapshots (for labeling)
+  # VolumeSnapshots (for labeling and cross-namespace cloning)
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshots"]
-    verbs: ["get", "list", "patch", "update"]
+    verbs: ["get", "list", "watch", "create", "patch", "update", "delete"]
+  # VolumeSnapshotContents (cluster-scoped, for cross-namespace restore)
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["get", "list", "watch", "create", "patch", "update", "delete"]
   # Argo Workflows task results (for output parameters)
   - apiGroups: ["argoproj.io"]
     resources: ["workflowtaskresults"]
