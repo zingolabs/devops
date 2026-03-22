@@ -1,0 +1,42 @@
+# Cleanup Ephemeral Deployment
+# Deletes namespace and all resources within
+#
+# Usage:
+#   argo submit --from workflowtemplate/cleanup-ephemeral \
+#     -p namespace=ephemeral-test
+#
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cleanup-ephemeral
+  namespace: argo
+spec:
+  entrypoint: cleanup
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: namespace
+        value: ephemeral-test
+
+  templates:
+    - name: cleanup
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            NS="{{workflow.parameters.namespace}}"
+
+            # Safety check - only delete namespaces labeled as ephemeral
+            LABEL=$(kubectl get namespace "$NS" -o jsonpath='{.metadata.labels.zcash-stack/ephemeral}' 2>/dev/null || echo "")
+
+            if [ "$LABEL" != "true" ]; then
+              echo "ERROR: Namespace $NS is not labeled as ephemeral!"
+              echo "Refusing to delete for safety."
+              exit 1
+            fi
+
+            echo "Deleting ephemeral namespace: $NS"
+            kubectl delete namespace "$NS" --wait=true
+            echo "Cleanup complete."

@@ -4,3 +4,5 @@ kind: Kustomization
 resources:
   - rbac.yaml
   - snapshot-golden.yaml
+  - deploy-ephemeral.yaml
+  - cleanup-ephemeral.yaml
