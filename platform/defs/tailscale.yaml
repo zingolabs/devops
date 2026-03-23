@@ -1,0 +1,3 @@
+name: tailscale
+namespace: tailscale
+sourcePath: platform/tailscale
