@@ -1,0 +1,166 @@
+# Tryout Deploy Workflow
+# Creates a zaino-only tryout instance from a snapshot
+# Uses golden-mainnet zebra as RPC backend
+#
+# Usage:
+#   argo submit --from workflowtemplate/deploy-tryout -n argo \
+#     -p namespace=tryout-edi -p tester=edi
+#
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: deploy-tryout
+  namespace: argo
+spec:
+  entrypoint: deploy
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: namespace
+        value: tryout-test
+      - name: tester
+        value: unknown
+      - name: source-namespace
+        value: golden-mainnet
+      - name: zaino-snapshot
+        value: zaino-mainnet-snapshot
+
+  templates:
+    - name: deploy
+      steps:
+        - - name: create-namespace
+            template: ensure-namespace
+        - - name: clone-zaino-snapshot
+            template: clone-snapshot
+        - - name: helm-install
+            template: helm-install
+        - - name: report
+            template: report-endpoint
+
+    - name: ensure-namespace
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            kubectl create namespace {{workflow.parameters.namespace}} --dry-run=client -o yaml | kubectl apply -f -
+            kubectl label namespace {{workflow.parameters.namespace}} \
+              zcash-stack/tryout=true \
+              zcash-stack/tester={{workflow.parameters.tester}} \
+              --overwrite
+
+    - name: clone-snapshot
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            SOURCE_NS="{{workflow.parameters.source-namespace}}"
+            TARGET_NS="{{workflow.parameters.namespace}}"
+            SOURCE_SNAP="{{workflow.parameters.zaino-snapshot}}"
+            TARGET_SNAP="zaino-snapshot"
+
+            # Get the VolumeSnapshotContent name for the source snapshot
+            VSC_NAME=$(kubectl get volumesnapshot "$SOURCE_SNAP" -n "$SOURCE_NS" \
+              -o jsonpath='{.status.boundVolumeSnapshotContentName}')
+
+            if [ -z "$VSC_NAME" ]; then
+              echo "ERROR: Source snapshot $SOURCE_SNAP not bound to any VolumeSnapshotContent"
+              exit 1
+            fi
+
+            # Get snapshotHandle and other details from the VolumeSnapshotContent
+            SNAPSHOT_HANDLE=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
+              -o jsonpath='{.status.snapshotHandle}')
+            DRIVER=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
+              -o jsonpath='{.spec.driver}')
+            SNAPSHOT_CLASS=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
+              -o jsonpath='{.spec.volumeSnapshotClassName}')
+            RESTORE_SIZE=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
+              -o jsonpath='{.status.restoreSize}')
+
+            echo "Cloning snapshot for tester: {{workflow.parameters.tester}}"
+            echo "  Source: $SOURCE_NS/$SOURCE_SNAP"
+            echo "  Target: $TARGET_NS/$TARGET_SNAP"
+            echo "  SnapshotHandle: $SNAPSHOT_HANDLE"
+
+            # Create new VolumeSnapshotContent pointing to target namespace
+            TARGET_VSC_NAME="${TARGET_SNAP}-content-${TARGET_NS}"
+            cat <<EOF | kubectl apply -f -
+            apiVersion: snapshot.storage.k8s.io/v1
+            kind: VolumeSnapshotContent
+            metadata:
+              name: ${TARGET_VSC_NAME}
+            spec:
+              deletionPolicy: Retain
+              driver: ${DRIVER}
+              source:
+                snapshotHandle: ${SNAPSHOT_HANDLE}
+              volumeSnapshotClassName: ${SNAPSHOT_CLASS}
+              volumeSnapshotRef:
+                apiVersion: snapshot.storage.k8s.io/v1
+                kind: VolumeSnapshot
+                name: ${TARGET_SNAP}
+                namespace: ${TARGET_NS}
+            EOF
+
+            # Create VolumeSnapshot in target namespace
+            cat <<EOF | kubectl apply -f -
+            apiVersion: snapshot.storage.k8s.io/v1
+            kind: VolumeSnapshot
+            metadata:
+              name: ${TARGET_SNAP}
+              namespace: ${TARGET_NS}
+            spec:
+              source:
+                volumeSnapshotContentName: ${TARGET_VSC_NAME}
+              volumeSnapshotClassName: ${SNAPSHOT_CLASS}
+            EOF
+
+            # Wait for snapshot to be ready
+            echo "Waiting for snapshot to be ready..."
+            kubectl wait volumesnapshot "$TARGET_SNAP" -n "$TARGET_NS" \
+              --for=jsonpath='{.status.readyToUse}'=true --timeout=60s
+
+            echo "Snapshot ready in $TARGET_NS"
+
+    - name: helm-install
+      container:
+        image: alpine/helm:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            apk add --no-cache git
+            git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
+            helm upgrade --install tryout \
+              /tmp/zcash-stack/charts/zcash-stack \
+              --namespace {{workflow.parameters.namespace}} \
+              -f /values/tryout-mainnet.yaml \
+              --set zaino.volumes.data.dataSource.name=zaino-snapshot \
+              --wait --timeout 10m
+        volumeMounts:
+          - name: values
+            mountPath: /values
+      volumes:
+        - name: values
+          configMap:
+            name: ephemeral-values
+
+    - name: report-endpoint
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            echo "========================================"
+            echo "Tryout deployment ready!"
+            echo "========================================"
+            echo "Tester: {{workflow.parameters.tester}}"
+            echo "Namespace: {{workflow.parameters.namespace}}"
+            echo "Zaino gRPC: zaino.{{workflow.parameters.namespace}}.svc:8137"
+            echo "Zebra RPC: zebra.golden-mainnet.svc:8232 (shared)"
+            echo ""
+            echo "To cleanup:"
+            echo "  argo submit --from workflowtemplate/cleanup-ephemeral -p namespace={{workflow.parameters.namespace}}"

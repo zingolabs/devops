@@ -5,5 +5,6 @@ resources:
   - rbac.yaml
   - snapshot-golden.yaml
   - deploy-ephemeral.yaml
+  - deploy-tryout.yaml
   - cleanup-ephemeral.yaml
   - ephemeral-values.yaml

@@ -5,6 +5,43 @@ metadata:
   name: ephemeral-values
   namespace: argo
 data:
+  tryout-mainnet.yaml: |
+    # Zaino-only tryout instance, uses golden-mainnet zebra
+    ingress:
+      enabled: false
+
+    zebra:
+      enabled: false
+
+    zaino:
+      enabled: true
+      name: zaino
+      replicas: 1
+      rpcService: zebra.golden-mainnet.svc
+      image:
+        repository: zingodevops/zaino
+        tag: 0.2.0-rc.6-no-tls
+        hash: ""
+      storageClassName: topolvm-thin
+      volumes:
+        data:
+          size: 500Gi
+          dataSource:
+            kind: VolumeSnapshot
+            apiGroup: snapshot.storage.k8s.io
+            # name is set via --set at deploy time
+      requests:
+        cpu: 1
+        memory: 2Gi
+      limits:
+        memory: 16Gi
+
+    lightwalletd:
+      enabled: false
+
+    zcashd:
+      enabled: false
+
   ephemeral-testnet.yaml: |
     ingress:
       enabled: false
