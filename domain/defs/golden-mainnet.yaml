@@ -1,0 +1,12 @@
+name: golden-mainnet
+namespace: golden-mainnet
+type: helm-git
+chartRepo: https://github.com/zingolabs/zcash-stack
+chartPath: charts/zcash-stack
+chartRevision: main
+valuesFile: clusters/ENV/values/golden-mainnet.yaml
+ignoreDifferences:
+  - group: apps
+    kind: StatefulSet
+    jsonPointers:
+      - /spec/replicas
