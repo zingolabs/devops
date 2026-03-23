@@ -1,10 +1,10 @@
-name: zcash-testnet
-namespace: zcash
+name: golden-testnet
+namespace: golden-testnet
 type: helm-git
 chartRepo: https://github.com/zingolabs/zcash-stack
 chartPath: charts/zcash-stack
 chartRevision: main
-valuesFile: clusters/ENV/values/zcash-testnet.yaml
+valuesFile: clusters/ENV/values/golden-testnet.yaml
 ignoreDifferences:
   - group: apps
     kind: StatefulSet

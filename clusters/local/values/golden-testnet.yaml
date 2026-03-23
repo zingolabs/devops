@@ -3,9 +3,9 @@ ingress:
 
 zebra:
   enabled: true
-  name: zebra-testnet
+  name: zebra
   testnet: true
-  replicas: 0
+  replicas: 1
   storageClassName: topolvm-thin
   volumes:
     data:
@@ -18,13 +18,13 @@ zebra:
 
 zaino:
   enabled: true
-  name: zaino-testnet
-  replicas: 0
-  rpcService: zebra-testnet
+  name: zaino
+  replicas: 1
+  rpcService: zebra
   storageClassName: topolvm-thin
   image:
     repository: zingodevops/zaino
-    tag: 0.2.0-rc.4-no-tls
+    tag: 0.2.0-rc.6
     hash: ""
     pullPolicy: IfNotPresent
   volumes:
