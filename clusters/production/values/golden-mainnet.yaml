@@ -24,7 +24,7 @@ zaino:
   storageClassName: topolvm-thin
   image:
     repository: zingodevops/zaino
-    tag: 0.2.0-rc.6
+    tag: 0.2.0-rc.6-no-tls
     hash: ""
     pullPolicy: IfNotPresent
   volumes:
