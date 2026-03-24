@@ -19,3 +19,8 @@ spec:
       path: /
       interval: 30s
       scrapeTimeout: 10s
+      relabelings:
+        # Copy all app.kubernetes.io/* labels from service to metrics
+        - action: labelmap
+          regex: __meta_kubernetes_service_label_app_kubernetes_io_(.+)
+          replacement: $1
