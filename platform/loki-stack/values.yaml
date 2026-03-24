@@ -21,8 +21,10 @@ promtail:
 # Disable Grafana - using kube-prometheus-stack's Grafana
 grafana:
   enabled: false
-  # Loki datasource will be added to kube-prometheus-stack's Grafana
-  # via additionalDataSources in its values if needed
+  # Datasource is managed via kube-prometheus-stack values.yaml
+  sidecar:
+    datasources:
+      enabled: false
 
 # Disable other optional components
 fluent-bit:
