@@ -16,6 +16,10 @@ grafana:
   # Fix permission issues with PV
   initChownData:
     enabled: false
+  securityContext:
+    runAsUser: 472
+    runAsGroup: 472
+    fsGroup: 472
   # Add Loki datasource
   additionalDataSources:
     - name: Loki
