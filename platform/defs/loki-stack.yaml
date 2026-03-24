@@ -1,0 +1,3 @@
+name: loki-stack
+namespace: monitoring
+sourcePath: platform/loki-stack

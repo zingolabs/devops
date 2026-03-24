@@ -1,0 +1,82 @@
+# kube-prometheus-stack configuration
+
+# Grafana
+grafana:
+  enabled: true
+  # Reference secret for admin password
+  # Create with: kubectl create secret generic grafana-admin -n monitoring --from-literal=admin-password=<your-password>
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  persistence:
+    enabled: true
+    storageClassName: topolvm-thin
+    size: 10Gi
+  # Add Loki datasource
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki-stack:3100
+      access: proxy
+      isDefault: false
+  # Expose via Tailscale
+  service:
+    type: ClusterIP
+    annotations:
+      tailscale.com/expose: "true"
+
+# Prometheus
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: 50GB
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: topolvm-thin
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+
+# AlertManager
+alertmanager:
+  alertmanagerSpec:
+    retention: 120h
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: topolvm-thin
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+# Node exporter for host metrics
+nodeExporter:
+  enabled: true
+
+# kube-state-metrics for k8s object metrics
+kubeStateMetrics:
+  enabled: true
+
+# Disable etcd monitoring (not accessible in k3s by default)
+kubeEtcd:
+  enabled: false
+
+# Disable kube-proxy monitoring (k3s uses different networking)
+kubeProxy:
+  enabled: false
