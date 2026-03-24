@@ -13,6 +13,9 @@ grafana:
     enabled: true
     storageClassName: topolvm-thin
     size: 10Gi
+  # Fix permission issues with PV
+  initChownData:
+    enabled: false
   # Add Loki datasource
   additionalDataSources:
     - name: Loki
