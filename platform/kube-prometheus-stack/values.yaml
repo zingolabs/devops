@@ -17,9 +17,12 @@ grafana:
   additionalDataSources:
     - name: Loki
       type: loki
+      uid: loki
       url: http://loki-stack.monitoring.svc.cluster.local:3100
       access: proxy
       isDefault: false
+      jsonData:
+        timeout: 60
   # Expose via Tailscale
   service:
     type: ClusterIP
