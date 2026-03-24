@@ -5,7 +5,7 @@ loki:
   enabled: true
   persistence:
     enabled: true
-    storageClassName: topolvm-thin
+    storageClassName: local-path
     size: 50Gi
   config:
     chunk_store_config:

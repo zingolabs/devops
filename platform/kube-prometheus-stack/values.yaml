@@ -11,15 +11,8 @@ grafana:
     passwordKey: admin-password
   persistence:
     enabled: true
-    storageClassName: topolvm-thin
+    storageClassName: local-path
     size: 10Gi
-  # Fix permission issues with PV
-  initChownData:
-    enabled: false
-  securityContext:
-    runAsUser: 472
-    runAsGroup: 472
-    fsGroup: 472
   # Add Loki datasource
   additionalDataSources:
     - name: Loki
@@ -47,7 +40,7 @@ prometheus:
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: topolvm-thin
+          storageClassName: local-path
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
@@ -66,7 +59,7 @@ alertmanager:
     storage:
       volumeClaimTemplate:
         spec:
-          storageClassName: topolvm-thin
+          storageClassName: local-path
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
