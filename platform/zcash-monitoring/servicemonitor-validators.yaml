@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: zcash-validators
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/component: validator
+    release: kube-prometheus-stack
+spec:
+  # Scrape validator services in any namespace
+  namespaceSelector:
+    any: true
+  # Match services with component=validator label
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: validator
+  endpoints:
+    - port: metrics
+      path: /
+      interval: 30s
+      scrapeTimeout: 10s
