@@ -13,25 +13,21 @@ env:
 config:
   settings:
     title: Zingo Infrastructure
-    favicon: https://raw.githubusercontent.com/nicogaldamez/zcash-brand/main/zcash-icons/yellow/zcash-icon-yellow.png
+    favicon: https://avatars.githubusercontent.com/u/70598323?s=200&v=4
     headerStyle: boxed
     layout:
-      Golden (Mainnet):
+      Golden:
         style: row
-        columns: 3
-      Golden (Testnet):
-        style: row
-        columns: 3
+        columns: 2
       Tryouts:
         style: row
         columns: 3
       Platform:
         style: row
-        columns: 3
+        columns: 2
 
   services:
-    # --- Domain services ---
-    - Golden (Mainnet):
+    - Golden:
         - Zebra (mainnet):
             icon: mdi-cube-outline
             href: "#"
@@ -44,8 +40,6 @@ config:
             description: gRPC lightwalletd indexer (mainnet)
             namespace: golden-mainnet
             podSelector: "app=zaino"
-
-    - Golden (Testnet):
         - Zebra (testnet):
             icon: mdi-cube-outline
             href: "#"
@@ -79,7 +73,6 @@ config:
             namespace: tryout-3
             podSelector: "app=zaino"
 
-    # --- Platform services ---
     - Platform:
         - monitoring-kube-prometheus-stack-grafana.vaquita-altair.ts.net:
             icon: grafana
@@ -95,9 +88,8 @@ config:
             podSelector: "app.kubernetes.io/name=argocd-server"
 
   widgets:
-    - search:
-        provider: duckduckgo
-        target: _blank
+    - logo:
+        icon: https://avatars.githubusercontent.com/u/70598323?s=200&v=4
 
   kubernetes:
     mode: cluster
