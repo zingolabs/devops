@@ -21,6 +21,11 @@ zaino:
   name: zaino
   replicas: 1
   rpcService: zebra
+  service:
+    type: ClusterIP
+    port: 8137
+    annotations:
+      tailscale.com/expose: "true"
   storageClassName: topolvm-thin
   image:
     repository: zingodevops/zaino
