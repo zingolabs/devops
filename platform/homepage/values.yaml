@@ -1,0 +1,95 @@
+image:
+  repository: ghcr.io/gethomepage/homepage
+  tag: v1.11.0
+
+enableRbac: true
+serviceAccount:
+  create: true
+
+env:
+  - name: HOMEPAGE_ALLOWED_HOSTS
+    value: "homepage.vaquita-altair.ts.net"
+
+config:
+  settings:
+    title: Zingo Infrastructure
+    favicon: https://raw.githubusercontent.com/nicogaldamez/zcash-brand/main/zcash-icons/yellow/zcash-icon-yellow.png
+    headerStyle: boxed
+    layout:
+      Golden (Mainnet):
+        style: row
+        columns: 2
+      Golden (Testnet):
+        style: row
+        columns: 2
+      Tryouts:
+        style: row
+        columns: 3
+      Platform:
+        style: row
+        columns: 3
+
+  services:
+    - Golden (Mainnet):
+        - Zaino:
+            icon: mdi-server-network
+            href: https://golden-mainnet-zaino.vaquita-altair.ts.net
+            description: gRPC indexer (mainnet)
+            namespace: golden-mainnet
+            app: zaino
+
+    - Golden (Testnet):
+        - Zaino:
+            icon: mdi-server-network
+            href: https://golden-testnet-zaino.vaquita-altair.ts.net
+            description: gRPC indexer (testnet)
+            namespace: golden-testnet
+            app: zaino
+
+    - Tryouts:
+        - Tryout 1:
+            icon: mdi-test-tube
+            href: https://tryout-1-zaino.vaquita-altair.ts.net
+            description: Zaino ephemeral instance
+            namespace: tryout-1
+            app: zaino
+        - Tryout 2:
+            icon: mdi-test-tube
+            href: https://tryout-2-zaino.vaquita-altair.ts.net
+            description: Zaino ephemeral instance
+            namespace: tryout-2
+            app: zaino
+        - Tryout 3:
+            icon: mdi-test-tube
+            href: https://tryout-3-zaino.vaquita-altair.ts.net
+            description: Zaino ephemeral instance (Funnel enabled)
+            namespace: tryout-3
+            app: zaino
+
+    - Platform:
+        - Grafana:
+            icon: grafana
+            href: https://monitoring-kube-prometheus-stack-grafana.vaquita-altair.ts.net
+            description: Metrics & dashboards
+            namespace: monitoring
+            app: grafana
+        - ArgoCD:
+            icon: argocd
+            href: https://argocd-argocd-server.vaquita-altair.ts.net
+            description: GitOps deployments
+            namespace: argocd
+            app: argocd-server
+
+  widgets:
+    - kubernetes:
+        cluster:
+          show: true
+          cpu: true
+          memory: true
+          showLabel: true
+
+  kubernetes:
+    mode: cluster
+
+  bookmarks: []
+  docker: {}
