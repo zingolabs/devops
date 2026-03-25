@@ -12,6 +12,22 @@ helmCharts:
     includeCRDs: true
     valuesFile: values.yaml
 
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: homepage
+    behavior: replace
+    files:
+      - settings.yaml=config/settings.yaml
+      - services.yaml=config/services.yaml
+      - widgets.yaml=config/widgets.yaml
+      - kubernetes.yaml=config/kubernetes.yaml
+    options:
+      labels:
+        app.kubernetes.io/name: homepage
+        app.kubernetes.io/instance: homepage
+
 patches:
   - target:
       kind: Service

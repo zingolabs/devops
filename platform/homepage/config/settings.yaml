@@ -1,0 +1,16 @@
+title: Zingo Infrastructure
+favicon: https://raw.githubusercontent.com/nicogaldamez/zcash-brand/main/zcash-icons/yellow/zcash-icon-yellow.png
+headerStyle: boxed
+layout:
+  Golden (Mainnet):
+    style: row
+    columns: 3
+  Golden (Testnet):
+    style: row
+    columns: 3
+  Tryouts:
+    style: row
+    columns: 3
+  Platform:
+    style: row
+    columns: 3

@@ -1,0 +1,70 @@
+- Golden (Mainnet):
+    - Zebra:
+        icon: mdi-cube-outline
+        href: "#"
+        description: "Zcash full node (mainnet)"
+        namespace: golden-mainnet
+        app: zebra
+        podSelector: "app=zebra"
+    - Zaino:
+        icon: mdi-server-network
+        href: https://golden-mainnet-zaino.vaquita-altair.ts.net
+        description: "golden-mainnet-zaino.vaquita-altair.ts.net"
+        namespace: golden-mainnet
+        app: zaino
+        podSelector: "app=zaino"
+
+- Golden (Testnet):
+    - Zebra:
+        icon: mdi-cube-outline
+        href: "#"
+        description: "Zcash full node (testnet)"
+        namespace: golden-testnet
+        app: zebra
+        podSelector: "app=zebra"
+    - Zaino:
+        icon: mdi-server-network
+        href: https://golden-testnet-zaino.vaquita-altair.ts.net
+        description: "golden-testnet-zaino.vaquita-altair.ts.net"
+        namespace: golden-testnet
+        app: zaino
+        podSelector: "app=zaino"
+
+- Tryouts:
+    - Tryout 1 (Zaino):
+        icon: mdi-test-tube
+        href: https://tryout-1-zaino.vaquita-altair.ts.net
+        description: "tryout-1-zaino.vaquita-altair.ts.net"
+        namespace: tryout-1
+        app: zaino
+        podSelector: "app=zaino"
+    - Tryout 2 (Zaino):
+        icon: mdi-test-tube
+        href: https://tryout-2-zaino.vaquita-altair.ts.net
+        description: "tryout-2-zaino.vaquita-altair.ts.net"
+        namespace: tryout-2
+        app: zaino
+        podSelector: "app=zaino"
+    - Tryout 3 (Zaino):
+        icon: mdi-test-tube
+        href: https://tryout-3-zaino.vaquita-altair.ts.net
+        description: "tryout-3-zaino.vaquita-altair.ts.net (Funnel enabled)"
+        namespace: tryout-3
+        app: zaino
+        podSelector: "app=zaino"
+
+- Platform:
+    - Grafana:
+        icon: grafana
+        href: https://monitoring-kube-prometheus-stack-grafana.vaquita-altair.ts.net
+        description: "monitoring-kube-prometheus-stack-grafana.vaquita-altair.ts.net"
+        namespace: monitoring
+        app: grafana
+        podSelector: "app.kubernetes.io/name=grafana"
+    - ArgoCD:
+        icon: argocd
+        href: https://argocd-argocd-server.vaquita-altair.ts.net
+        description: "argocd-argocd-server.vaquita-altair.ts.net"
+        namespace: argocd
+        app: argocd-server
+        podSelector: "app.kubernetes.io/name=argocd-server"
