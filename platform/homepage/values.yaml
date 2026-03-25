@@ -8,7 +8,7 @@ serviceAccount:
 
 env:
   - name: HOMEPAGE_ALLOWED_HOSTS
-    value: "homepage.vaquita-altair.ts.net"
+    value: "zingo-infra.vaquita-altair.ts.net"
 
 config:
   settings:

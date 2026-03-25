@@ -20,3 +20,9 @@ patches:
       - op: add
         path: /metadata/annotations/tailscale.com~1expose
         value: "true"
+      - op: add
+        path: /metadata/annotations/tailscale.com~1hostname
+        value: "zingo-infra"
+      - op: replace
+        path: /spec/ports/0/port
+        value: 80
