@@ -5,9 +5,11 @@ layout:
   Golden (Mainnet):
     style: row
     columns: 3
+    header: false
   Golden (Testnet):
     style: row
     columns: 3
+    header: false
   Tryouts:
     style: row
     columns: 3
