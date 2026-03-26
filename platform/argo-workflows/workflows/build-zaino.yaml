@@ -62,7 +62,7 @@ spec:
         parameters:
           - name: image
             valueFrom:
-              parameter: "{{steps.build-image.outputs.parameters.image}}"
+              parameter: "{{steps.resolve-tag.outputs.parameters.image}}"
 
     - name: resolve-tag
       container:
@@ -74,13 +74,17 @@ spec:
             if [ -z "$TAG" ]; then
               TAG=$(echo "{{workflow.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
             fi
-            echo "Resolved tag: $TAG"
-            echo -n "$TAG" > /tmp/tag
+            IMAGE="{{workflow.parameters.registry}}:${TAG}"
+            echo "Resolved: $IMAGE"
+            echo -n "$IMAGE" > /tmp/image
       outputs:
         parameters:
           - name: tag
             valueFrom:
-              path: /tmp/tag
+              path: /tmp/image
+          - name: image
+            valueFrom:
+              path: /tmp/image
 
     - name: kaniko
       inputs:
@@ -110,9 +114,3 @@ spec:
             items:
               - key: .dockerconfigjson
                 path: config.json
-      outputs:
-        parameters:
-          - name: image
-            valueFrom:
-              default: "{{inputs.parameters.destination}}"
-              expression: "inputs.parameters.destination"
