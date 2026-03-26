@@ -8,3 +8,12 @@ helmCharts:
     releaseName: argo-workflows
     namespace: argo
     valuesFile: values.yaml
+
+patches:
+  - target:
+      kind: Service
+      name: argo-workflows-server
+    patch: |
+      - op: replace
+        path: /spec/ports/0/port
+        value: 443

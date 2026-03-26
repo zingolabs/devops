@@ -86,9 +86,9 @@ config:
             description: GitOps continuous delivery
             namespace: argocd
             podSelector: "app.kubernetes.io/name=argocd-server"
-        - argo-workflows.vaquita-altair.ts.net:2746:
+        - argo-workflows.vaquita-altair.ts.net:
             icon: mdi-workflow
-            href: https://argo-workflows.vaquita-altair.ts.net:2746
+            href: https://argo-workflows.vaquita-altair.ts.net
             description: Workflow engine
             namespace: argo
             podSelector: "app.kubernetes.io/name=argo-workflows-server"
