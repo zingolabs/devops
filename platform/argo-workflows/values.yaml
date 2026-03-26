@@ -2,7 +2,9 @@
 controller:
   workflowNamespaces:
     - argo
-    - zcash
 server:
   extraArgs:
     - --auth-mode=server
+  serviceAnnotations:
+    tailscale.com/expose: "true"
+    tailscale.com/hostname: argo-workflows
