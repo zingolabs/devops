@@ -46,6 +46,8 @@ spec:
   templates:
     - name: build
       steps:
+        - - name: resolve-tag
+            template: resolve-tag
         - - name: build-image
             template: kaniko
             arguments:
@@ -54,15 +56,31 @@ spec:
                   value: "{{workflow.parameters.ref}}"
                 - name: no-tls
                   value: "{{workflow.parameters.no-tls}}"
-                - name: registry
-                  value: "{{workflow.parameters.registry}}"
-                - name: tag
-                  value: "{{workflow.parameters.tag}}"
+                - name: destination
+                  value: "{{workflow.parameters.registry}}:{{steps.resolve-tag.outputs.parameters.tag}}"
       outputs:
         parameters:
           - name: image
             valueFrom:
               parameter: "{{steps.build-image.outputs.parameters.image}}"
+
+    - name: resolve-tag
+      container:
+        image: busybox
+        command: [sh, -c]
+        args:
+          - |
+            TAG="{{workflow.parameters.tag}}"
+            if [ -z "$TAG" ]; then
+              TAG=$(echo "{{workflow.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            fi
+            echo "Resolved tag: $TAG"
+            echo -n "$TAG" > /tmp/tag
+      outputs:
+        parameters:
+          - name: tag
+            valueFrom:
+              path: /tmp/tag
 
     - name: kaniko
       inputs:
@@ -70,35 +88,18 @@ spec:
           - name: ref
           - name: no-tls
             default: "true"
-          - name: registry
-            default: zingodevops/zaino
-          - name: tag
-            default: ""
+          - name: destination
       container:
         image: gcr.io/kaniko-project/executor:latest
-        command: [sh, -c]
         args:
-          - |
-            TAG="{{inputs.parameters.tag}}"
-            if [ -z "$TAG" ]; then
-              # Default tag: sanitized ref name
-              TAG=$(echo "{{inputs.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
-            fi
-            IMAGE="{{inputs.parameters.registry}}:${TAG}"
-            echo "Building zaino from ref {{inputs.parameters.ref}}"
-            echo "  NO_TLS={{inputs.parameters.no-tls}}"
-            echo "  Image: ${IMAGE}"
-            echo -n "${IMAGE}" > /tmp/image
-
-            /kaniko/executor \
-              --context=git://github.com/zingolabs/zaino.git#refs/heads/{{inputs.parameters.ref}} \
-              --dockerfile=Dockerfile \
-              --destination=${IMAGE} \
-              --build-arg=NO_TLS={{inputs.parameters.no-tls}} \
-              --cache=true \
-              --cache-repo={{inputs.parameters.registry}}:kaniko-cache \
-              --snapshot-mode=redo \
-              --use-new-run
+          - --context=git://github.com/zingolabs/zaino.git#refs/heads/{{inputs.parameters.ref}}
+          - --dockerfile=Dockerfile
+          - --destination={{inputs.parameters.destination}}
+          - --build-arg=NO_TLS={{inputs.parameters.no-tls}}
+          - --cache=true
+          - --cache-repo=zingodevops/zaino:kaniko-cache
+          - --snapshot-mode=redo
+          - --use-new-run
         volumeMounts:
           - name: docker-config
             mountPath: /kaniko/.docker
@@ -113,4 +114,5 @@ spec:
         parameters:
           - name: image
             valueFrom:
-              path: /tmp/image
+              default: "{{inputs.parameters.destination}}"
+              expression: "inputs.parameters.destination"
