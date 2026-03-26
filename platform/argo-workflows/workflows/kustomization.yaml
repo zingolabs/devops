@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - rbac.yaml
   - snapshot-golden.yaml
+  - build-zaino.yaml
   - deploy-ephemeral.yaml
   - deploy-tryout.yaml
   - cleanup-ephemeral.yaml

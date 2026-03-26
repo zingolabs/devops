@@ -1,0 +1,116 @@
+# Build Zaino Image
+# Builds zainod from a git ref using Kaniko and pushes to a registry
+#
+# Prerequisites:
+#   - Docker registry secret 'docker-registry-creds' in argo namespace:
+#     kubectl create secret docker-registry docker-registry-creds -n argo \
+#       --docker-server=https://index.docker.io/v1/ \
+#       --docker-username=<user> --docker-password=<token>
+#
+# Usage:
+#   argo submit --from workflowtemplate/build-zaino -n argo \
+#     -p ref=my-feature-branch
+#
+#   argo submit --from workflowtemplate/build-zaino -n argo \
+#     -p ref=dev -p tag=latest-dev
+#
+# Composable — call from other workflows via templateRef:
+#   - name: build
+#     templateRef:
+#       name: build-zaino
+#       template: kaniko
+#     arguments:
+#       parameters:
+#         - name: ref
+#           value: "{{workflow.parameters.zaino-ref}}"
+#
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: build-zaino
+  namespace: argo
+spec:
+  entrypoint: build
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: ref
+        value: dev
+      - name: no-tls
+        value: "true"
+      - name: registry
+        value: zingodevops/zaino
+      - name: tag
+        value: ""
+
+  templates:
+    - name: build
+      steps:
+        - - name: build-image
+            template: kaniko
+            arguments:
+              parameters:
+                - name: ref
+                  value: "{{workflow.parameters.ref}}"
+                - name: no-tls
+                  value: "{{workflow.parameters.no-tls}}"
+                - name: registry
+                  value: "{{workflow.parameters.registry}}"
+                - name: tag
+                  value: "{{workflow.parameters.tag}}"
+      outputs:
+        parameters:
+          - name: image
+            valueFrom:
+              parameter: "{{steps.build-image.outputs.parameters.image}}"
+
+    - name: kaniko
+      inputs:
+        parameters:
+          - name: ref
+          - name: no-tls
+            default: "true"
+          - name: registry
+            default: zingodevops/zaino
+          - name: tag
+            default: ""
+      container:
+        image: gcr.io/kaniko-project/executor:latest
+        command: [sh, -c]
+        args:
+          - |
+            TAG="{{inputs.parameters.tag}}"
+            if [ -z "$TAG" ]; then
+              # Default tag: sanitized ref name
+              TAG=$(echo "{{inputs.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            fi
+            IMAGE="{{inputs.parameters.registry}}:${TAG}"
+            echo "Building zaino from ref {{inputs.parameters.ref}}"
+            echo "  NO_TLS={{inputs.parameters.no-tls}}"
+            echo "  Image: ${IMAGE}"
+            echo -n "${IMAGE}" > /tmp/image
+
+            /kaniko/executor \
+              --context=git://github.com/zingolabs/zaino.git#refs/heads/{{inputs.parameters.ref}} \
+              --dockerfile=Dockerfile \
+              --destination=${IMAGE} \
+              --build-arg=NO_TLS={{inputs.parameters.no-tls}} \
+              --cache=true \
+              --cache-repo={{inputs.parameters.registry}}:kaniko-cache \
+              --snapshot-mode=redo \
+              --use-new-run
+        volumeMounts:
+          - name: docker-config
+            mountPath: /kaniko/.docker
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: docker-registry-creds
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+      outputs:
+        parameters:
+          - name: image
+            valueFrom:
+              path: /tmp/image
