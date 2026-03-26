@@ -28,28 +28,28 @@ config:
 
   services:
     - Golden:
-        - Zebra (mainnet):
+        - golden-mainnet-zebra (internal):
             icon: mdi-cube-outline
             href: "#"
-            description: Zcash full node validator
+            description: Zebra 4.0.0 — full node validator (mainnet)
             namespace: golden-mainnet
             podSelector: "app=zebra"
         - golden-mainnet-zaino.vaquita-altair.ts.net:
             icon: mdi-server-network
             href: https://golden-mainnet-zaino.vaquita-altair.ts.net
-            description: gRPC lightwalletd indexer (mainnet)
+            description: Zaino 0.2.0-rc.6 — gRPC lightwalletd indexer (mainnet)
             namespace: golden-mainnet
             podSelector: "app=zaino"
-        - Zebra (testnet):
+        - golden-testnet-zebra (internal):
             icon: mdi-cube-outline
             href: "#"
-            description: Zcash full node validator
+            description: Zebra 4.0.0 — full node validator (testnet)
             namespace: golden-testnet
             podSelector: "app=zebra"
         - golden-testnet-zaino.vaquita-altair.ts.net:
             icon: mdi-server-network
             href: https://golden-testnet-zaino.vaquita-altair.ts.net
-            description: gRPC lightwalletd indexer (testnet)
+            description: Zaino 0.2.0-rc.6 — gRPC lightwalletd indexer (testnet)
             namespace: golden-testnet
             podSelector: "app=zaino"
 
@@ -90,6 +90,9 @@ config:
   widgets:
     - logo:
         icon: https://avatars.githubusercontent.com/u/70598323?s=200&v=4
+    - greeting:
+        text_size: xl
+        text: Zingo Infrastructure
 
   kubernetes:
     mode: cluster
