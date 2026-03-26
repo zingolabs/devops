@@ -75,13 +75,15 @@ spec:
               TAG=$(echo "{{workflow.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
             fi
             IMAGE="{{workflow.parameters.registry}}:${TAG}"
-            echo "Resolved: $IMAGE"
+            echo "Resolved tag: $TAG"
+            echo "Resolved image: $IMAGE"
+            echo -n "$TAG" > /tmp/tag
             echo -n "$IMAGE" > /tmp/image
       outputs:
         parameters:
           - name: tag
             valueFrom:
-              path: /tmp/image
+              path: /tmp/tag
           - name: image
             valueFrom:
               path: /tmp/image
