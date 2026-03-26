@@ -16,4 +16,4 @@ patches:
     patch: |
       - op: replace
         path: /spec/ports/0/port
-        value: 443
+        value: 80
