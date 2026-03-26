@@ -103,7 +103,7 @@ spec:
           - --destination={{inputs.parameters.destination}}
           - --build-arg=NO_TLS={{inputs.parameters.no-tls}}
           - --cache=true
-          - --cache-repo=zingodevops/zaino:kaniko-cache
+          - --cache-repo=zingodevops/zaino-cache
           - --snapshot-mode=redo
           - --use-new-run
         volumeMounts:
