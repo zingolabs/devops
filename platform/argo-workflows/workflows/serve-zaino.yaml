@@ -1,0 +1,280 @@
+# Serve Zaino
+# Builds a zaino image from any git ref and deploys it with a fresh
+# snapshot against the shared golden zebra.
+#
+# Usage:
+#   argo submit --from workflowtemplate/serve-zaino -n argo \
+#     -p ref=dev -p namespace=pr-123
+#
+#   argo submit --from workflowtemplate/serve-zaino -n argo \
+#     -p ref=feature/my-branch -p namespace=try-my-branch -p network=testnet
+#
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: serve-zaino
+  namespace: argo
+spec:
+  entrypoint: serve
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: ref
+        value: dev
+      - name: namespace
+        value: ""
+      - name: network
+        value: mainnet
+      - name: no-tls
+        value: "true"
+      - name: registry
+        value: zingodevops/zaino
+
+  templates:
+    - name: serve
+      dag:
+        tasks:
+          - name: resolve-namespace
+            template: resolve-namespace
+
+          - name: build-image
+            templateRef:
+              name: build-zaino
+              template: build
+            arguments:
+              parameters:
+                - name: ref
+                  value: "{{workflow.parameters.ref}}"
+                - name: no-tls
+                  value: "{{workflow.parameters.no-tls}}"
+                - name: registry
+                  value: "{{workflow.parameters.registry}}"
+                - name: tag
+                  value: ""
+
+          - name: fresh-snapshot
+            template: snapshot-zaino
+
+          - name: create-namespace
+            template: ensure-namespace
+            dependencies: [resolve-namespace]
+            arguments:
+              parameters:
+                - name: namespace
+                  value: "{{tasks.resolve-namespace.outputs.parameters.namespace}}"
+
+          - name: clone-snapshot
+            template: clone-snapshot
+            dependencies: [fresh-snapshot, create-namespace]
+            arguments:
+              parameters:
+                - name: namespace
+                  value: "{{tasks.resolve-namespace.outputs.parameters.namespace}}"
+                - name: source-snapshot
+                  value: "{{tasks.fresh-snapshot.outputs.parameters.snapshot}}"
+
+          - name: deploy
+            template: helm-install
+            dependencies: [build-image, clone-snapshot]
+            arguments:
+              parameters:
+                - name: namespace
+                  value: "{{tasks.resolve-namespace.outputs.parameters.namespace}}"
+                - name: image
+                  value: "{{tasks.build-image.outputs.parameters.image}}"
+
+          - name: report
+            template: report-endpoint
+            dependencies: [deploy]
+            arguments:
+              parameters:
+                - name: namespace
+                  value: "{{tasks.resolve-namespace.outputs.parameters.namespace}}"
+
+    # Resolve namespace: use provided value or generate from ref
+    - name: resolve-namespace
+      container:
+        image: busybox
+        command: [sh, -c]
+        args:
+          - |
+            NS="{{workflow.parameters.namespace}}"
+            if [ -z "$NS" ]; then
+              NS="serve-$(echo '{{workflow.parameters.ref}}' | sed 's/[^a-zA-Z0-9]/-/g' | tr 'A-Z' 'a-z' | head -c 50)"
+            fi
+            echo "Namespace: $NS"
+            echo -n "$NS" > /tmp/namespace
+      outputs:
+        parameters:
+          - name: namespace
+            valueFrom:
+              path: /tmp/namespace
+
+    # Snapshot zaino via Kanister: scale down → snapshot PVC → scale back up
+    - name: snapshot-zaino
+      resource:
+        action: create
+        manifest: |
+          apiVersion: cr.kanister.io/v1alpha1
+          kind: ActionSet
+          metadata:
+            generateName: serve-zaino-snap-
+            namespace: kanister
+          spec:
+            actions:
+              - name: backup
+                blueprint: zaino
+                object:
+                  apiVersion: apps/v1
+                  kind: StatefulSet
+                  name: zaino
+                  namespace: golden-{{workflow.parameters.network}}
+                options:
+                  zainoPvc: data-zaino-0
+                  network: {{workflow.parameters.network}}
+        successCondition: status.state == complete
+        failureCondition: status.state == failed
+      outputs:
+        parameters:
+          - name: snapshot
+            valueFrom:
+              jsonPath: '{.status.actions[0].artifacts.zainoSnapshot.keyValue.name}'
+
+    # Create and label the target namespace
+    - name: ensure-namespace
+      inputs:
+        parameters:
+          - name: namespace
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            kubectl create namespace {{inputs.parameters.namespace}} --dry-run=client -o yaml | kubectl apply -f -
+            kubectl label namespace {{inputs.parameters.namespace}} \
+              zcash-stack/ephemeral=true \
+              zcash-stack/ref={{workflow.parameters.ref}} \
+              --overwrite
+
+    # Clone snapshot cross-namespace
+    - name: clone-snapshot
+      inputs:
+        parameters:
+          - name: namespace
+          - name: source-snapshot
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            SOURCE_NS="golden-{{workflow.parameters.network}}"
+            TARGET_NS="{{inputs.parameters.namespace}}"
+            SOURCE_SNAP="{{inputs.parameters.source-snapshot}}"
+            TARGET_SNAP="zaino-snapshot"
+
+            # Get VolumeSnapshotContent details
+            VSC_NAME=$(kubectl get volumesnapshot "$SOURCE_SNAP" -n "$SOURCE_NS" \
+              -o jsonpath='{.status.boundVolumeSnapshotContentName}')
+            SNAPSHOT_HANDLE=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
+              -o jsonpath='{.status.snapshotHandle}')
+            DRIVER=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
+              -o jsonpath='{.spec.driver}')
+            SNAPSHOT_CLASS=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
+              -o jsonpath='{.spec.volumeSnapshotClassName}')
+
+            echo "Cloning snapshot to $TARGET_NS"
+            echo "  Source: $SOURCE_NS/$SOURCE_SNAP (handle: $SNAPSHOT_HANDLE)"
+
+            # Create VolumeSnapshotContent pointing to target namespace
+            TARGET_VSC="${TARGET_SNAP}-content-${TARGET_NS}"
+            cat <<EOF | kubectl apply -f -
+            apiVersion: snapshot.storage.k8s.io/v1
+            kind: VolumeSnapshotContent
+            metadata:
+              name: ${TARGET_VSC}
+            spec:
+              deletionPolicy: Retain
+              driver: ${DRIVER}
+              source:
+                snapshotHandle: ${SNAPSHOT_HANDLE}
+              volumeSnapshotClassName: ${SNAPSHOT_CLASS}
+              volumeSnapshotRef:
+                apiVersion: snapshot.storage.k8s.io/v1
+                kind: VolumeSnapshot
+                name: ${TARGET_SNAP}
+                namespace: ${TARGET_NS}
+            EOF
+
+            # Create VolumeSnapshot in target namespace
+            cat <<EOF | kubectl apply -f -
+            apiVersion: snapshot.storage.k8s.io/v1
+            kind: VolumeSnapshot
+            metadata:
+              name: ${TARGET_SNAP}
+              namespace: ${TARGET_NS}
+            spec:
+              source:
+                volumeSnapshotContentName: ${TARGET_VSC}
+              volumeSnapshotClassName: ${SNAPSHOT_CLASS}
+            EOF
+
+            kubectl wait volumesnapshot "$TARGET_SNAP" -n "$TARGET_NS" \
+              --for=jsonpath='{.status.readyToUse}'=true --timeout=60s
+            echo "Snapshot cloned to $TARGET_NS/$TARGET_SNAP"
+
+    # Helm install zaino-only, pointing at shared golden zebra
+    - name: helm-install
+      inputs:
+        parameters:
+          - name: namespace
+          - name: image
+      container:
+        image: alpine/helm:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            apk add --no-cache git
+
+            # Parse image into repo:tag
+            REPO=$(echo '{{inputs.parameters.image}}' | cut -d: -f1)
+            TAG=$(echo '{{inputs.parameters.image}}' | cut -d: -f2)
+
+            git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
+            helm upgrade --install zaino \
+              /tmp/zcash-stack/charts/zcash-stack \
+              --namespace {{inputs.parameters.namespace}} \
+              -f /values/tryout-mainnet.yaml \
+              --set zaino.image.repository="$REPO" \
+              --set zaino.image.tag="$TAG" \
+              --set zaino.volumes.data.dataSource.name=zaino-snapshot \
+              --wait --timeout 10m
+        volumeMounts:
+          - name: values
+            mountPath: /values
+      volumes:
+        - name: values
+          configMap:
+            name: ephemeral-values
+
+    # Report endpoints
+    - name: report-endpoint
+      inputs:
+        parameters:
+          - name: namespace
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            echo "========================================"
+            echo "Zaino deployment ready!"
+            echo "========================================"
+            echo "Ref:       {{workflow.parameters.ref}}"
+            echo "Namespace: {{inputs.parameters.namespace}}"
+            echo "Zaino gRPC: zaino.{{inputs.parameters.namespace}}.svc:8137"
+            echo "Zebra RPC:  zebra.golden-{{workflow.parameters.network}}.svc:8232 (shared)"
+            echo ""
+            echo "To cleanup:"
+            echo "  argo submit --from workflowtemplate/cleanup-ephemeral -p namespace={{inputs.parameters.namespace}}"

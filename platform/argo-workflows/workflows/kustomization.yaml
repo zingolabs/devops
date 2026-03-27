@@ -8,5 +8,6 @@ resources:
   - buildkit-cache-pvc.yaml
   - deploy-ephemeral.yaml
   - deploy-tryout.yaml
+  - serve-zaino.yaml
   - cleanup-ephemeral.yaml
   - ephemeral-values.yaml

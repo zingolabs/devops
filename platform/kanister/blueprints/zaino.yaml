@@ -1,0 +1,70 @@
+# Kanister Blueprint for Zaino snapshots
+# Manages zaino data independently of zebra
+#
+# Target: Zaino StatefulSet
+# Options (passed via ActionSet):
+#   - zainoPvc: PVC to snapshot
+#   - network: testnet/mainnet (for labeling)
+#
+apiVersion: cr.kanister.io/v1alpha1
+kind: Blueprint
+metadata:
+  name: zaino
+  namespace: kanister
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+actions:
+  backup:
+    outputArtifacts:
+      zainoSnapshot:
+        keyValue:
+          name: "{{ .Phases.snapshotZaino.Output.name }}"
+          namespace: "{{ .Object.metadata.namespace }}"
+    phases:
+    - func: ScaleWorkload
+      name: scaleDownZaino
+      args:
+        namespace: "{{ .Object.metadata.namespace }}"
+        name: "{{ .Object.metadata.name }}"
+        kind: StatefulSet
+        replicas: 0
+    - func: CreateCSISnapshot
+      name: snapshotZaino
+      args:
+        namespace: "{{ .Object.metadata.namespace }}"
+        pvc: "{{ .Options.zainoPvc }}"
+        snapshotClass: topolvm-snapshot
+        labels:
+          app.kubernetes.io/component: zaino
+          zcash-stack/network: "{{ .Options.network }}"
+          zcash-stack/source: serve
+    - func: ScaleWorkload
+      name: scaleUpZaino
+      args:
+        namespace: "{{ .Object.metadata.namespace }}"
+        name: "{{ .Object.metadata.name }}"
+        kind: StatefulSet
+        replicas: 1
+
+  restore:
+    inputArtifactNames:
+    - zainoSnapshot
+    phases:
+    - func: RestoreCSISnapshot
+      name: restoreZaino
+      args:
+        namespace: "{{ .Object.metadata.namespace }}"
+        name: "{{ .ArtifactsIn.zainoSnapshot.keyValue.name }}"
+        pvc: "{{ .Options.restorePvc }}"
+        storageClass: topolvm-thin
+        restoreSize: "{{ .Options.restoreSize }}"
+
+  delete:
+    inputArtifactNames:
+    - zainoSnapshot
+    phases:
+    - func: DeleteCSISnapshot
+      name: deleteZainoSnapshot
+      args:
+        namespace: "{{ .ArtifactsIn.zainoSnapshot.keyValue.namespace }}"
+        name: "{{ .ArtifactsIn.zainoSnapshot.keyValue.name }}"

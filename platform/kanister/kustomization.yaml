@@ -12,3 +12,4 @@ helmCharts:
 resources:
   - rbac.yaml
   - blueprints/zcash-stack.yaml
+  - blueprints/zaino.yaml
