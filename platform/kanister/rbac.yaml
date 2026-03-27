@@ -28,12 +28,26 @@ rules:
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
 ---
-# Grant Kanister access to zcash namespace
+# Grant Kanister access to golden namespaces
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: kanister-workload-manager
-  namespace: zcash
+  namespace: golden-mainnet
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kanister-workload-manager
+subjects:
+  - kind: ServiceAccount
+    name: kanister-kanister-operator
+    namespace: kanister
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kanister-workload-manager
+  namespace: golden-testnet
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
