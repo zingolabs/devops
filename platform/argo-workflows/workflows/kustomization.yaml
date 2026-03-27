@@ -5,6 +5,8 @@ resources:
   - rbac.yaml
   - snapshot-golden.yaml
   - build-zaino.yaml
+  - build-zaino-buildkit.yaml
+  - buildkit-cache-pvc.yaml
   - deploy-ephemeral.yaml
   - deploy-tryout.yaml
   - cleanup-ephemeral.yaml

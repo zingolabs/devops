@@ -1,0 +1,138 @@
+# Build Zaino Image (BuildKit variant)
+# Same as build-zaino but uses BuildKit instead of Kaniko.
+# BuildKit natively supports Dockerfile --mount=type=cache directives,
+# and persists all cache state (cargo registry, target/, layers) on a PVC.
+#
+# Prerequisites:
+#   - Docker registry secret 'docker-registry-creds' in argo namespace
+#   - PVC 'buildkit-cache' in argo namespace:
+#     kubectl apply -f - <<EOF
+#     apiVersion: v1
+#     kind: PersistentVolumeClaim
+#     metadata:
+#       name: buildkit-cache
+#       namespace: argo
+#     spec:
+#       accessModes: [ReadWriteOnce]
+#       resources:
+#         requests:
+#           storage: 10Gi
+#     EOF
+#
+# Usage:
+#   argo submit --from workflowtemplate/build-zaino-buildkit -n argo \
+#     -p ref=dev
+#
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: build-zaino-buildkit
+  namespace: argo
+spec:
+  entrypoint: build
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: ref
+        value: dev
+      - name: no-tls
+        value: "true"
+      - name: registry
+        value: zingodevops/zaino
+      - name: tag
+        value: ""
+
+  templates:
+    - name: build
+      steps:
+        - - name: resolve-tag
+            template: resolve-tag
+        - - name: build-image
+            template: buildkit
+            arguments:
+              parameters:
+                - name: ref
+                  value: "{{workflow.parameters.ref}}"
+                - name: no-tls
+                  value: "{{workflow.parameters.no-tls}}"
+                - name: destination
+                  value: "{{workflow.parameters.registry}}:{{steps.resolve-tag.outputs.parameters.tag}}"
+      outputs:
+        parameters:
+          - name: image
+            valueFrom:
+              parameter: "{{steps.resolve-tag.outputs.parameters.image}}"
+
+    - name: resolve-tag
+      container:
+        image: busybox
+        command: [sh, -c]
+        args:
+          - |
+            TAG="{{workflow.parameters.tag}}"
+            if [ -z "$TAG" ]; then
+              TAG=$(echo "{{workflow.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            fi
+            IMAGE="{{workflow.parameters.registry}}:${TAG}"
+            echo "Resolved tag: $TAG"
+            echo "Resolved image: $IMAGE"
+            echo -n "$TAG" > /tmp/tag
+            echo -n "$IMAGE" > /tmp/image
+      outputs:
+        parameters:
+          - name: tag
+            valueFrom:
+              path: /tmp/tag
+          - name: image
+            valueFrom:
+              path: /tmp/image
+
+    - name: buildkit
+      inputs:
+        parameters:
+          - name: ref
+          - name: no-tls
+            default: "true"
+          - name: destination
+      container:
+        image: moby/buildkit:v0.21.1-rootless
+        env:
+          - name: BUILDKITD_FLAGS
+            value: --oci-worker-no-process-sandbox
+        command:
+          - buildctl-daemonless.sh
+        args:
+          - build
+          - --frontend
+          - gateway.v0
+          - --opt
+          - source=docker/dockerfile
+          - --opt
+          - context=https://github.com/zingolabs/zaino.git#refs/heads/{{inputs.parameters.ref}}
+          - --opt
+          - build-arg:NO_TLS={{inputs.parameters.no-tls}}
+          - --output
+          - type=image,name={{inputs.parameters.destination}},push=true
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          seccompProfile:
+            type: Unconfined
+          appArmorProfile:
+            type: Unconfined
+        volumeMounts:
+          - name: docker-config
+            mountPath: /home/user/.docker
+            readOnly: true
+          - name: buildkit-cache
+            mountPath: /home/user/.local/share/buildkit
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: docker-registry-creds
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+        - name: buildkit-cache
+          persistentVolumeClaim:
+            claimName: buildkit-cache
