@@ -151,9 +151,10 @@ spec:
         args:
           - |
             kubectl create namespace {{inputs.parameters.namespace}} --dry-run=client -o yaml | kubectl apply -f -
+            SAFE_REF=$(echo "{{workflow.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
             kubectl label namespace {{inputs.parameters.namespace}} \
               zcash-stack/ephemeral=true \
-              zcash-stack/ref={{workflow.parameters.ref}} \
+              zcash-stack/ref="$SAFE_REF" \
               --overwrite
 
     # Clone snapshot cross-namespace
