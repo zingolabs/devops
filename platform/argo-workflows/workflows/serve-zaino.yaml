@@ -186,8 +186,14 @@ spec:
             echo "Cloning snapshot to $TARGET_NS"
             echo "  Source: $SOURCE_NS/$SOURCE_SNAP (handle: $SNAPSHOT_HANDLE)"
 
-            # Create VolumeSnapshotContent pointing to target namespace
+            # Clean up stale cluster-scoped resources from previous deploys.
+            # Safe: VSCs use deletionPolicy=Retain, so this only removes the
+            # Kubernetes reference, not the underlying LVM snapshot.
             TARGET_VSC="${TARGET_SNAP}-content-${TARGET_NS}"
+            kubectl delete volumesnapshotcontent "$TARGET_VSC" --ignore-not-found
+            kubectl delete volumesnapshot "$TARGET_SNAP" -n "$TARGET_NS" --ignore-not-found
+
+            # Create VolumeSnapshotContent pointing to target namespace
             cat <<EOF | kubectl apply -f -
             apiVersion: snapshot.storage.k8s.io/v1
             kind: VolumeSnapshotContent

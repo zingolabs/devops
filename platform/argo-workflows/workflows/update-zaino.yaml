@@ -1,0 +1,90 @@
+# Update Zaino
+# Rebuilds a zaino image from a git ref and hot-swaps it on an existing deploy.
+# No snapshot needed — the existing PVC has synced state, zaino catches up on restart.
+#
+# Usage:
+#   argo submit --from workflowtemplate/update-zaino -n argo \
+#     -p ref=dev -p namespace=pr-123
+#
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: update-zaino
+  namespace: argo
+spec:
+  entrypoint: update
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: ref
+        value: dev
+      - name: namespace
+      - name: no-tls
+        value: "true"
+      - name: registry
+        value: zingodevops/zaino
+
+  templates:
+    - name: update
+      steps:
+        - - name: build-image
+            templateRef:
+              name: build-zaino
+              template: build
+            arguments:
+              parameters:
+                - name: ref
+                  value: "{{workflow.parameters.ref}}"
+                - name: no-tls
+                  value: "{{workflow.parameters.no-tls}}"
+                - name: registry
+                  value: "{{workflow.parameters.registry}}"
+                - name: tag
+                  value: ""
+        - - name: upgrade
+            template: helm-upgrade
+            arguments:
+              parameters:
+                - name: image
+                  value: "{{steps.build-image.outputs.parameters.image}}"
+        - - name: report
+            template: report
+
+    - name: helm-upgrade
+      inputs:
+        parameters:
+          - name: image
+      container:
+        image: alpine/helm:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            NS="{{workflow.parameters.namespace}}"
+
+            # Parse image into repo:tag
+            REPO=$(echo '{{inputs.parameters.image}}' | cut -d: -f1)
+            TAG=$(echo '{{inputs.parameters.image}}' | cut -d: -f2)
+
+            echo "Upgrading zaino in $NS to $REPO:$TAG"
+            helm upgrade zaino \
+              --namespace "$NS" \
+              --reuse-values \
+              --set zaino.image.repository="$REPO" \
+              --set zaino.image.tag="$TAG" \
+              --wait --timeout 5m
+
+    - name: report
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            NS="{{workflow.parameters.namespace}}"
+            echo "========================================"
+            echo "Zaino updated!"
+            echo "========================================"
+            echo "Ref:       {{workflow.parameters.ref}}"
+            echo "Namespace: $NS"
+            echo ""
+            kubectl get pods -n "$NS" -l app.kubernetes.io/name=zaino -o wide

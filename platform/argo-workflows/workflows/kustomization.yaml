@@ -9,5 +9,6 @@ resources:
   - deploy-ephemeral.yaml
   - deploy-tryout.yaml
   - serve-zaino.yaml
+  - update-zaino.yaml
   - cleanup-ephemeral.yaml
   - ephemeral-values.yaml

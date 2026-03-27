@@ -1,5 +1,6 @@
 # Cleanup Ephemeral Deployment
-# Deletes namespace and all resources within
+# Deletes namespace and all resources within, including cluster-scoped
+# VolumeSnapshotContents that reference the namespace.
 #
 # Usage:
 #   argo submit --from workflowtemplate/cleanup-ephemeral \
@@ -36,6 +37,25 @@ spec:
               echo "Refusing to delete for safety."
               exit 1
             fi
+
+            # Clean up cluster-scoped VolumeSnapshotContents referencing this namespace.
+            # Safe because these are created with deletionPolicy: Retain — deleting
+            # the VSC removes only the Kubernetes reference object, NOT the underlying
+            # LVM snapshot on disk. The golden namespace's VSC and any provisioned PVCs
+            # are completely independent and unaffected.
+            echo "Cleaning up VolumeSnapshotContents referencing $NS..."
+            kubectl get volumesnapshotcontent -o json | \
+              python3 -c "
+            import json, sys
+            data = json.load(sys.stdin)
+            for item in data.get('items', []):
+                ref = item.get('spec', {}).get('volumeSnapshotRef', {})
+                if ref.get('namespace') == '$NS':
+                    print(item['metadata']['name'])
+            " | while read -r vsc; do
+              echo "  Deleting VolumeSnapshotContent: $vsc"
+              kubectl delete volumesnapshotcontent "$vsc"
+            done
 
             echo "Deleting ephemeral namespace: $NS"
             kubectl delete namespace "$NS" --wait=true
