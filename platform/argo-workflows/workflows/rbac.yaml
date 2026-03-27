@@ -39,9 +39,9 @@ rules:
   - apiGroups: [""]
     resources: ["namespaces"]
     verbs: ["create", "get", "list", "patch", "delete"]
-  # Helm deploy resources
+  # Helm deploy resources (pods needed for --wait readiness checks)
   - apiGroups: [""]
-    resources: ["configmaps", "secrets", "services", "persistentvolumeclaims"]
+    resources: ["configmaps", "secrets", "services", "persistentvolumeclaims", "pods"]
     verbs: ["*"]
   - apiGroups: ["apps"]
     resources: ["statefulsets", "deployments"]
