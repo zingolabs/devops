@@ -29,6 +29,8 @@ spec:
         value: "true"
       - name: registry
         value: zingodevops/zaino
+      - name: expose
+        value: "false"
 
   templates:
     - name: serve
@@ -80,6 +82,8 @@ spec:
               parameters:
                 - name: namespace
                   value: "{{tasks.resolve-namespace.outputs.parameters.namespace}}"
+                - name: expose
+                  value: "{{workflow.parameters.expose}}"
                 - name: image
                   value: "{{tasks.build-image.outputs.parameters.image}}"
 
@@ -236,6 +240,8 @@ spec:
         parameters:
           - name: namespace
           - name: image
+          - name: expose
+            default: "false"
       container:
         image: alpine/helm:latest
         command: [sh, -c]
@@ -248,6 +254,11 @@ spec:
             REPO=$(echo '{{inputs.parameters.image}}' | cut -d: -f1)
             TAG=$(echo '{{inputs.parameters.image}}' | cut -d: -f2)
 
+            EXPOSE_FLAG=""
+            if [ "{{inputs.parameters.expose}}" = "true" ]; then
+              EXPOSE_FLAG='--set zaino.service.annotations.tailscale\.com/expose=true'
+            fi
+
             git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
             helm upgrade --install zaino \
               /tmp/zcash-stack/charts/zcash-stack \
@@ -256,6 +267,7 @@ spec:
               --set zaino.image.repository="$REPO" \
               --set zaino.image.tag="$TAG" \
               --set zaino.volumes.data.dataSource.name=zaino-snapshot \
+              $EXPOSE_FLAG \
               --wait --timeout 10m
         volumeMounts:
           - name: values
