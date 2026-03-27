@@ -21,7 +21,7 @@
 #   - name: build
 #     templateRef:
 #       name: build-zaino
-#       template: buildkit
+#       template: build
 #     arguments:
 #       parameters:
 #         - name: ref
@@ -48,19 +48,37 @@ spec:
 
   templates:
     - name: build
+      inputs:
+        parameters:
+          - name: ref
+            default: "{{workflow.parameters.ref}}"
+          - name: no-tls
+            default: "{{workflow.parameters.no-tls}}"
+          - name: registry
+            default: "{{workflow.parameters.registry}}"
+          - name: tag
+            default: "{{workflow.parameters.tag}}"
       steps:
         - - name: resolve-tag
             template: resolve-tag
+            arguments:
+              parameters:
+                - name: ref
+                  value: "{{inputs.parameters.ref}}"
+                - name: registry
+                  value: "{{inputs.parameters.registry}}"
+                - name: tag
+                  value: "{{inputs.parameters.tag}}"
         - - name: build-image
             template: buildkit
             arguments:
               parameters:
                 - name: ref
-                  value: "{{workflow.parameters.ref}}"
+                  value: "{{inputs.parameters.ref}}"
                 - name: no-tls
-                  value: "{{workflow.parameters.no-tls}}"
+                  value: "{{inputs.parameters.no-tls}}"
                 - name: destination
-                  value: "{{workflow.parameters.registry}}:{{steps.resolve-tag.outputs.parameters.tag}}"
+                  value: "{{inputs.parameters.registry}}:{{steps.resolve-tag.outputs.parameters.tag}}"
       outputs:
         parameters:
           - name: image
@@ -68,16 +86,21 @@ spec:
               parameter: "{{steps.resolve-tag.outputs.parameters.image}}"
 
     - name: resolve-tag
+      inputs:
+        parameters:
+          - name: ref
+          - name: registry
+          - name: tag
       container:
         image: busybox
         command: [sh, -c]
         args:
           - |
-            TAG="{{workflow.parameters.tag}}"
+            TAG="{{inputs.parameters.tag}}"
             if [ -z "$TAG" ]; then
-              TAG=$(echo "{{workflow.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+              TAG=$(echo "{{inputs.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
             fi
-            IMAGE="{{workflow.parameters.registry}}:${TAG}"
+            IMAGE="{{inputs.parameters.registry}}:${TAG}"
             echo "Resolved tag: $TAG"
             echo "Resolved image: $IMAGE"
             echo -n "$TAG" > /tmp/tag
