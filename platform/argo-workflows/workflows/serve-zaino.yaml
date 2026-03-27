@@ -256,7 +256,7 @@ spec:
 
             EXPOSE_FLAG=""
             if [ "{{inputs.parameters.expose}}" = "true" ]; then
-              EXPOSE_FLAG='--set zaino.service.annotations.tailscale\.com/expose=true'
+              EXPOSE_FLAG='--set-string zaino.service.annotations.tailscale\.com/expose=true'
             fi
 
             git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
