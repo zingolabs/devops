@@ -35,12 +35,13 @@ minimize rebuild time when iterating on source changes.
   compilation into its own layer. Dependencies only recompile when Cargo.toml
   or Cargo.lock changes.
 - Stages: planner → cook (deps only) → builder (source only) → runtime
-- Even without BuildKit cache mounts, kaniko can cache the cook layer since its
-  inputs (recipe.json) only change when dependencies change.
-- Status: Dockerfile drafted, needs PR to zingolabs/zaino
-- Run: TODO
-- Cold build time: TODO
-- Warm build (source-only change): TODO
+- Branch: `feature/cargo-chef-dockerfile` on zingolabs/zaino
+- Run: `build-zaino-4j6qb`
+- Cold build time: **8m39s**
+- Notes: Slower than baseline. Kaniko has no persistent layer cache between runs
+  (ephemeral pods, no PVC), so cargo-chef's extra stages (install cargo-chef twice,
+  cook deps) are pure overhead. The cacheable cook layer is rebuilt from scratch
+  every time.
 
 ## Experiment B: BuildKit with PVC cache
 
@@ -50,19 +51,23 @@ minimize rebuild time when iterating on source changes.
   target/ — BuildKit uses them automatically.
 - Requires: PVC `buildkit-cache` (10Gi), seccomp/apparmor Unconfined
 - Workflow: `build-zaino-buildkit`
-- Status: Workflow template created
-- Run: TODO
-- Cold build time: TODO
-- Warm build (source-only change): TODO
+- Run (cold): `build-zaino-buildkit-s9p2d` — **4m27s**
+- Run (warm, same ref): `build-zaino-buildkit-h9f22` — **20s**
+- Run (warm, src change): `build-zaino-buildkit-5dzbm` — **1m25s**
 
 ## Experiment A+B: BuildKit + cargo-chef
 
-- Both optimizations combined. BuildKit cache mounts keep cargo registry/git warm,
-  and cargo-chef separates the dependency layer.
-- Run: TODO
-- Cold build time: TODO
-- Warm build (source-only change): TODO
+- Not tested. With BuildKit's `--mount=type=cache` keeping cargo registry/git/target
+  warm on the PVC, incremental compilation already works. cargo-chef would only help
+  on cold PVC (rare case), adding complexity without meaningful benefit.
 
 ## Conclusions
 
-TODO — fill in after running experiments.
+- **Kaniko is a dead end for Rust builds**: ignores `--mount=type=cache`, no persistent
+  local cache, remote cache hangs on large layers, project archived by Google.
+- **BuildKit + PVC is the clear winner**: 4m27s cold → 1m25s on src change → 20s warm.
+  Rootless (UID 1000), no privileged mode needed. Requires seccomp/apparmor Unconfined
+  scoped to the build pod only.
+- **cargo-chef not worth it here**: adds complexity without benefit when BuildKit mount
+  caches are warm. Only useful on cold PVC which is rare with persistent storage.
+- **Decision**: Replaced kaniko with BuildKit as the sole builder in `build-zaino`.
