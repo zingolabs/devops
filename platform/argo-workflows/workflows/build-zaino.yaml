@@ -51,13 +51,13 @@ spec:
       inputs:
         parameters:
           - name: ref
-            default: "{{workflow.parameters.ref}}"
+            default: dev
           - name: no-tls
-            default: "{{workflow.parameters.no-tls}}"
+            default: "true"
           - name: registry
-            default: "{{workflow.parameters.registry}}"
+            default: zingodevops/zaino
           - name: tag
-            default: "{{workflow.parameters.tag}}"
+            default: ""
       steps:
         - - name: resolve-tag
             template: resolve-tag
