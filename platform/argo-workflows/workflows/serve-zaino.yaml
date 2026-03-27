@@ -194,12 +194,13 @@ spec:
             # Clean up stale cluster-scoped resources from previous deploys.
             # Safe: VSCs use deletionPolicy=Retain, so this only removes the
             # Kubernetes reference, not the underlying LVM snapshot.
+            # We delete + create (not apply) because snapshotHandle is immutable.
             TARGET_VSC="${TARGET_SNAP}-content-${TARGET_NS}"
-            kubectl delete volumesnapshotcontent "$TARGET_VSC" --ignore-not-found
-            kubectl delete volumesnapshot "$TARGET_SNAP" -n "$TARGET_NS" --ignore-not-found
+            kubectl delete volumesnapshot "$TARGET_SNAP" -n "$TARGET_NS" --ignore-not-found --wait=true
+            kubectl delete volumesnapshotcontent "$TARGET_VSC" --ignore-not-found --wait=true
 
             # Create VolumeSnapshotContent pointing to target namespace
-            cat <<EOF | kubectl apply -f -
+            cat <<EOF | kubectl create -f -
             apiVersion: snapshot.storage.k8s.io/v1
             kind: VolumeSnapshotContent
             metadata:
@@ -218,7 +219,7 @@ spec:
             EOF
 
             # Create VolumeSnapshot in target namespace
-            cat <<EOF | kubectl apply -f -
+            cat <<EOF | kubectl create -f -
             apiVersion: snapshot.storage.k8s.io/v1
             kind: VolumeSnapshot
             metadata:
