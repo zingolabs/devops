@@ -60,6 +60,7 @@ spec:
         args:
           - |
             set -e
+            apk add --no-cache git
             NS="{{workflow.parameters.namespace}}"
 
             # Parse image into repo:tag
@@ -67,12 +68,13 @@ spec:
             TAG=$(echo '{{inputs.parameters.image}}' | cut -d: -f2)
 
             echo "Upgrading zaino in $NS to $REPO:$TAG"
+            git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
             helm upgrade zaino \
+              /tmp/zcash-stack/charts/zcash-stack \
               --namespace "$NS" \
               --reuse-values \
               --set zaino.image.repository="$REPO" \
-              --set zaino.image.tag="$TAG" \
-              --wait --timeout 5m
+              --set zaino.image.tag="$TAG"
 
     - name: report
       container:
