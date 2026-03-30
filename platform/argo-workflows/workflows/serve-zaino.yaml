@@ -31,6 +31,8 @@ spec:
         value: zingodevops/zaino
       - name: expose
         value: "false"
+      - name: use-cache
+        value: "true"
 
   templates:
     - name: serve
@@ -56,6 +58,7 @@ spec:
 
           - name: fresh-snapshot
             template: snapshot-zaino
+            when: "{{workflow.parameters.use-cache}} == true"
 
           - name: create-namespace
             template: ensure-namespace
@@ -68,6 +71,7 @@ spec:
           - name: clone-snapshot
             template: clone-snapshot
             dependencies: [fresh-snapshot, create-namespace]
+            when: "{{workflow.parameters.use-cache}} == true"
             arguments:
               parameters:
                 - name: namespace
@@ -77,7 +81,7 @@ spec:
 
           - name: deploy
             template: helm-install
-            dependencies: [build-image, clone-snapshot]
+            dependencies: [build-image, clone-snapshot, create-namespace]
             arguments:
               parameters:
                 - name: namespace
@@ -86,6 +90,8 @@ spec:
                   value: "{{workflow.parameters.expose}}"
                 - name: image
                   value: "{{tasks.build-image.outputs.parameters.image}}"
+                - name: use-cache
+                  value: "{{workflow.parameters.use-cache}}"
 
           - name: report
             template: report-endpoint
@@ -243,6 +249,8 @@ spec:
           - name: image
           - name: expose
             default: "false"
+          - name: use-cache
+            default: "true"
       container:
         image: alpine/helm:latest
         command: [sh, -c]
@@ -260,6 +268,11 @@ spec:
               EXPOSE_FLAG='--set-string zaino.service.annotations.tailscale\.com/expose=true'
             fi
 
+            CACHE_FLAG=""
+            if [ "{{inputs.parameters.use-cache}}" = "true" ]; then
+              CACHE_FLAG="--set zaino.volumes.data.dataSource.name=zaino-snapshot"
+            fi
+
             git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
             helm upgrade --install zaino \
               /tmp/zcash-stack/charts/zcash-stack \
@@ -267,7 +280,7 @@ spec:
               -f /values/tryout-mainnet.yaml \
               --set zaino.image.repository="$REPO" \
               --set zaino.image.tag="$TAG" \
-              --set zaino.volumes.data.dataSource.name=zaino-snapshot \
+              $CACHE_FLAG \
               $EXPOSE_FLAG \
               --wait --timeout 10m
         volumeMounts:
