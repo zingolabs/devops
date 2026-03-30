@@ -2,7 +2,7 @@ ingress:
   enabled: false
 
 zebra:
-  enabled: true
+  enabled: false
   name: zebra
   testnet: false
   replicas: 1
@@ -21,7 +21,7 @@ zebra:
     memory: 16Gi
 
 zaino:
-  enabled: true
+  enabled: false
   name: zaino
   replicas: 1
   rpcService: zebra
