@@ -51,5 +51,5 @@ spec:
             done
 
             echo "Deleting ephemeral namespace: $NS"
-            kubectl delete namespace "$NS"
+            kubectl delete namespace "$NS" --wait=true
             echo "Cleanup complete."
