@@ -25,7 +25,7 @@ data:
       storageClassName: topolvm-thin
       volumes:
         data:
-          size: 500Gi
+          size: 100Gi
           dataSource:
             kind: VolumeSnapshot
             apiGroup: snapshot.storage.k8s.io
@@ -80,7 +80,7 @@ data:
       storageClassName: topolvm-thin
       volumes:
         data:
-          size: 150Gi
+          size: 100Gi
           dataSource:
             kind: VolumeSnapshot
             apiGroup: snapshot.storage.k8s.io

@@ -10,6 +10,10 @@ zebra:
   volumes:
     data:
       size: 50Gi
+      dataSource:
+        kind: VolumeSnapshot
+        apiGroup: snapshot.storage.k8s.io
+        name: zebra-data-zebra-0-snapshot-jjvtt
   requests:
     cpu: 1
     memory: 2Gi
@@ -34,7 +38,11 @@ zaino:
     pullPolicy: IfNotPresent
   volumes:
     data:
-      size: 200Gi
+      size: 100Gi
+      dataSource:
+        kind: VolumeSnapshot
+        apiGroup: snapshot.storage.k8s.io
+        name: data-zaino-0-snapshot-24ldq
   requests:
     cpu: 1
     memory: 2Gi
