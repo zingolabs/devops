@@ -25,6 +25,7 @@ data:
       logging:
         format: json
         color: "false"
+        level: "zaino=trace,zainod=trace,info"
       storageClassName: topolvm-thin
       volumes:
         data:
