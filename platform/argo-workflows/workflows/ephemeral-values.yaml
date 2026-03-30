@@ -22,6 +22,9 @@ data:
         repository: zingodevops/zaino
         tag: 0.2.0-rc.6-no-tls
         hash: ""
+      logging:
+        format: json
+        color: "false"
       storageClassName: topolvm-thin
       volumes:
         data:
