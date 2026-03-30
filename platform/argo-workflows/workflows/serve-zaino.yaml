@@ -58,7 +58,7 @@ spec:
 
           - name: fresh-snapshot
             template: snapshot-zaino
-            when: "{{workflow.parameters.use-cache}} == true"
+            when: "'{{workflow.parameters.use-cache}}' == 'true'"
 
           - name: create-namespace
             template: ensure-namespace
@@ -71,7 +71,7 @@ spec:
           - name: clone-snapshot
             template: clone-snapshot
             dependencies: [fresh-snapshot, create-namespace]
-            when: "{{workflow.parameters.use-cache}} == true"
+            when: "'{{workflow.parameters.use-cache}}' == 'true'"
             arguments:
               parameters:
                 - name: namespace
