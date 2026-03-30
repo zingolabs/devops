@@ -271,6 +271,8 @@ spec:
             CACHE_FLAG=""
             if [ "{{inputs.parameters.use-cache}}" = "true" ]; then
               CACHE_FLAG="--set zaino.volumes.data.dataSource.name=zaino-snapshot"
+            else
+              CACHE_FLAG="--set zaino.volumes.data.dataSource=null"
             fi
 
             git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
