@@ -44,19 +44,12 @@ spec:
             # LVM snapshot on disk. The golden namespace's VSC and any provisioned PVCs
             # are completely independent and unaffected.
             echo "Cleaning up VolumeSnapshotContents referencing $NS..."
-            kubectl get volumesnapshotcontent -o json | \
-              python3 -c "
-            import json, sys
-            data = json.load(sys.stdin)
-            for item in data.get('items', []):
-                ref = item.get('spec', {}).get('volumeSnapshotRef', {})
-                if ref.get('namespace') == '$NS':
-                    print(item['metadata']['name'])
-            " | while read -r vsc; do
+            kubectl get volumesnapshotcontent -o jsonpath='{range .items[?(@.spec.volumeSnapshotRef.namespace=="'$NS'")]}{.metadata.name}{"\n"}{end}' | while read -r vsc; do
+              [ -z "$vsc" ] && continue
               echo "  Deleting VolumeSnapshotContent: $vsc"
               kubectl delete volumesnapshotcontent "$vsc"
             done
 
             echo "Deleting ephemeral namespace: $NS"
-            kubectl delete namespace "$NS" --wait=true
+            kubectl delete namespace "$NS"
             echo "Cleanup complete."

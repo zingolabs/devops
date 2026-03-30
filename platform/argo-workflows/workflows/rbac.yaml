@@ -38,7 +38,7 @@ rules:
   # Namespaces for ephemeral deploys
   - apiGroups: [""]
     resources: ["namespaces"]
-    verbs: ["create", "get", "list", "patch", "delete"]
+    verbs: ["create", "get", "list", "watch", "patch", "delete"]
   # Helm deploy resources (pods needed for --wait readiness checks)
   - apiGroups: [""]
     resources: ["configmaps", "secrets", "services", "persistentvolumeclaims", "pods"]
