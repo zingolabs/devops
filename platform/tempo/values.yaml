@@ -27,6 +27,9 @@ tempo:
         path: /var/tempo/traces
       wal:
         path: /var/tempo/wal
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
   server:
     http_listen_port: 3200
 
