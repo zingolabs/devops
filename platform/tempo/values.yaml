@@ -1,0 +1,39 @@
+# Tempo single-binary configuration
+# Chart: grafana/tempo v1.24.4
+
+replicas: 1
+
+tempo:
+  reportingEnabled: false
+  retention: 72h
+  memBallastSizeMbs: 256
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+  server:
+    http_listen_port: 3200
+
+tempoQuery:
+  enabled: false
+
+persistence:
+  enabled: true
+  storageClassName: local-path
+  size: 10Gi

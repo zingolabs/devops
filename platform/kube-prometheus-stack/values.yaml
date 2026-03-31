@@ -23,6 +23,26 @@ grafana:
       isDefault: false
       jsonData:
         timeout: 60
+        derivedFields:
+          - datasourceUid: tempo
+            matcherRegex: '"trace_id":"([a-f0-9]+)"'
+            name: TraceID
+            url: "$${__value.raw}"
+            urlDisplayLabel: "View Trace"
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      url: http://tempo.monitoring.svc.cluster.local:3200
+      access: proxy
+      isDefault: false
+      jsonData:
+        tracesToLogsV2:
+          datasourceUid: loki
+          spanStartTimeShift: "-1m"
+          spanEndTimeShift: "1m"
+          filterByTraceID: true
+        nodeGraph:
+          enabled: true
   # Expose via Tailscale
   service:
     type: ClusterIP
