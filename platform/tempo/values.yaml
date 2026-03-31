@@ -30,10 +30,6 @@ tempo:
   metricsGenerator:
     enabled: true
     remoteWriteUrl: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
-  overrides:
-    defaults:
-      ingestion:
-        max_bytes_per_trace: 50000000  # 50MB, default 5MB
   server:
     http_listen_port: 3200
 
