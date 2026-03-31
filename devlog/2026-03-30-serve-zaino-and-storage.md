@@ -128,3 +128,70 @@ Started improving zaino's tracing instrumentation. Key changes:
 
 JSON structured logging (`ZAINOLOG_FORMAT=json`) combined with Loki 3.x means
 all tracing fields are queryable in Grafana without regex.
+
+## OpenTelemetry + Tempo
+
+Deployed Grafana Tempo (2.9.0 single-binary) for distributed tracing. Added
+`tracing-opentelemetry` + `opentelemetry-otlp` to zaino (behind `otel` feature
+flag, default on). When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, spans are exported
+to Tempo via OTLP gRPC. Existing `#[instrument]` annotations work unchanged.
+
+Grafana datasource configured with bidirectional Loki↔Tempo linking:
+- Log line → click "View Trace" → flame graph in Tempo
+- Trace span → click "Logs" → Loki filtered by trace ID
+
+Tempo metrics-generator OOMKills at high trace volume during bulk sync.
+Increased to 4Gi, may need sampling or tuning for sustained bulk sync loads.
+
+## Batched sync architecture
+
+Changed the sync loop from "sync entire chain in one `sync_to_height` call" to
+bounded 1000-block batches per iteration. Each `sync_iteration` span completes
+in seconds, exports to Tempo immediately, and emits a structured batch summary:
+
+```json
+{"message":"Syncing batch","from_height":1785000,"to_height":1786000,
+ "blocks_to_sync":1000,"chain_tip":3291050,"blocks_remaining":1505050,
+ "progress_pct":54}
+```
+
+Previous approach: one `sync_to_height` call processing 1.5M+ blocks, span never
+closed, no metrics/traces exported until complete (hours).
+
+## NFS sync boundary issue
+
+Discovered that NonFinalizedState (designed for ~100 block tip window) was being
+asked to sync 1.5M+ blocks during bulk sync. The sync loop passes NFS the entire
+gap between finalized tip and chain tip.
+
+Added a guard: NFS skips sync when gap exceeds 100 blocks and logs a warning.
+Proper fix documented in zaino-design/nfs-sync-boundary.md — NFS should receive
+an explicit bounded window, not "sync everything FS didn't".
+
+## ZainoDB status flapping fix
+
+Removed per-block `StatusType::Ready` / `StatusType::Syncing` transitions from
+`write_core`. Status was flipping thousands of times per second during bulk sync.
+Status lifecycle (Syncing → Ready) is now owned by the db handler, not individual
+block writes. Also fixed a bug where `CriticalError` was immediately overwritten
+by `RecoverableError` on the same line.
+
+## zcash-stack chart: extraEnv
+
+Added `extraEnv` passthrough to the zaino container in the zcash-stack helm chart.
+Operators can now pass arbitrary env vars (e.g. OTEL_EXPORTER_OTLP_ENDPOINT)
+without modifying the chart template for each new variable.
+
+## Design docs created
+- `zaino-design/zaino-observability-requirements.md` — health/readiness/metrics from operator POV
+- `zaino-design/local-dev-environment.md` — k3d lightweight cluster for zaino dev iteration
+- `zaino-design/nfs-sync-boundary.md` — NFS architecture fix for bounded sync window
+
+## TODO (next session)
+- Clean up feature/structured-tracing branch into reviewable PRs
+- Argo Events for GitHub PR label → workflow triggers
+- Storage management: snapshot pruning, capacity monitoring
+- Tempo metrics-generator tuning (sampling for bulk sync)
+- NFS architecture: explicit bounded window, decouple from FS
+- Zaino health/readiness probes: start gRPC server before sync
+- Local k3d dev environment for fast tracing iteration
