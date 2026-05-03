@@ -31,7 +31,7 @@ config:
         - golden-mainnet-zebra (internal):
             icon: mdi-cube-outline
             href: "#"
-            description: Zebra 4.0.0 (mainnet)
+            description: Zebra 4.4.0 (mainnet)
             namespace: golden-mainnet
             podSelector: "app=zebra"
         - golden-mainnet-zaino.vaquita-altair.ts.net:
@@ -43,7 +43,7 @@ config:
         - golden-testnet-zebra (internal):
             icon: mdi-cube-outline
             href: "#"
-            description: Zebra 4.0.0 (testnet)
+            description: Zebra 4.4.0 (testnet)
             namespace: golden-testnet
             podSelector: "app=zebra"
         - golden-testnet-zaino.vaquita-altair.ts.net:
