@@ -45,6 +45,8 @@ spec:
         value: zingodevops/zaino
       - name: tag
         value: ""
+      - name: rust-version
+        value: "1.95.0"
 
   templates:
     - name: build
@@ -58,6 +60,8 @@ spec:
             default: zingodevops/zaino
           - name: tag
             default: ""
+          - name: rust-version
+            default: "1.95.0"
       steps:
         - - name: resolve-tag
             template: resolve-tag
@@ -77,6 +81,8 @@ spec:
                   value: "{{inputs.parameters.ref}}"
                 - name: no-tls
                   value: "{{inputs.parameters.no-tls}}"
+                - name: rust-version
+                  value: "{{inputs.parameters.rust-version}}"
                 - name: destination
                   value: "{{inputs.parameters.registry}}:{{steps.resolve-tag.outputs.parameters.tag}}"
       outputs:
@@ -120,6 +126,8 @@ spec:
           - name: ref
           - name: no-tls
             default: "true"
+          - name: rust-version
+            default: "1.95.0"
           - name: destination
       container:
         image: moby/buildkit:v0.21.1-rootless
@@ -136,6 +144,8 @@ spec:
           - source=docker/dockerfile
           - --opt
           - context=https://github.com/zingolabs/zaino.git#refs/heads/{{inputs.parameters.ref}}
+          - --opt
+          - build-arg:RUST_VERSION={{inputs.parameters.rust-version}}
           - --opt
           - build-arg:NO_TLS={{inputs.parameters.no-tls}}
           - --output

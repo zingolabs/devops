@@ -23,6 +23,8 @@ spec:
         value: "true"
       - name: registry
         value: zingodevops/zaino
+      - name: rust-version
+        value: "1.95.0"
 
   templates:
     - name: update
@@ -41,6 +43,8 @@ spec:
                   value: "{{workflow.parameters.registry}}"
                 - name: tag
                   value: ""
+                - name: rust-version
+                  value: "{{workflow.parameters.rust-version}}"
         - - name: upgrade
             template: helm-upgrade
             arguments:
