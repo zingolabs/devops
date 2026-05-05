@@ -26,6 +26,9 @@ data:
         format: json
         color: "false"
         level: "zaino=trace,zainod=trace,info"
+      extraEnv:
+        - name: ZAINO_METRICS_ENDPOINT
+          value: "0.0.0.0:9998"
       storageClassName: topolvm-thin
       volumes:
         data:
