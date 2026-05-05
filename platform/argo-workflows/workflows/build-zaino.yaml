@@ -143,7 +143,7 @@ spec:
           - --opt
           - source=docker/dockerfile
           - --opt
-          - context=https://github.com/zingolabs/zaino.git#refs/heads/{{inputs.parameters.ref}}
+          - context=https://github.com/zingolabs/zaino.git#{{inputs.parameters.ref}}
           - --opt
           - build-arg:RUST_VERSION={{inputs.parameters.rust-version}}
           - --opt
