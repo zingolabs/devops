@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: zcash-indexers
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/component: indexer
+    release: kube-prometheus-stack
+spec:
+  # Scrape indexer services in any namespace
+  namespaceSelector:
+    any: true
+  # Match services with component=indexer label
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: indexer
+  endpoints:
+    - port: metrics
+      path: /
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        # Copy all app.kubernetes.io/* labels from service to metrics
+        - action: labelmap
+          regex: __meta_kubernetes_service_label_app_kubernetes_io_(.+)
+          replacement: $1

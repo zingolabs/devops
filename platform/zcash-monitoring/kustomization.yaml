@@ -3,3 +3,4 @@ kind: Kustomization
 
 resources:
   - servicemonitor-validators.yaml
+  - servicemonitor-indexers.yaml
