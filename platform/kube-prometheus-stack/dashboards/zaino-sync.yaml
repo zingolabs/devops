@@ -113,7 +113,7 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "none",
-              "decimals": 0,
+              "decimals": 1,
               "custom": {
                 "drawStyle": "line",
                 "lineWidth": 2,
