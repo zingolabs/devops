@@ -106,29 +106,41 @@ data:
         },
         {
           "id": 3,
-          "title": "Sync Rate",
-          "description": "Blocks synced per minute (5m avg)",
-          "type": "stat",
+          "title": "Sync Rate (blocks/min)",
+          "type": "timeseries",
           "gridPos": { "h": 5, "w": 8, "x": 16, "y": 5 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": {
             "defaults": {
               "unit": "none",
               "decimals": 0,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "red", "value": null },
-                  { "color": "yellow", "value": 10 },
-                  { "color": "green", "value": 100 }
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "spanNulls": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Average" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [6, 6] } },
+                  { "id": "custom.lineWidth", "value": 1 },
+                  { "id": "custom.fillOpacity", "value": 0 },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "white" } }
                 ]
               }
-            }
+            ]
           },
           "targets": [
             {
               "expr": "rate(zaino_sync_finalized_height{namespace=\"$namespace\"}[5m]) * 60",
-              "legendFormat": "blocks/min"
+              "legendFormat": "5m rate"
+            },
+            {
+              "expr": "avg_over_time(rate(zaino_sync_finalized_height{namespace=\"$namespace\"}[5m])[${__range}:1m]) * 60",
+              "legendFormat": "Average"
             }
           ]
         },
