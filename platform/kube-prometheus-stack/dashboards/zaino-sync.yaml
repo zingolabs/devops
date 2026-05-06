@@ -134,34 +134,52 @@ data:
         },
         {
           "id": 4,
-          "title": "Current Heights",
-          "type": "table",
-          "gridPos": { "h": 5, "w": 24, "x": 0, "y": 10 },
+          "title": "Finalized Height",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 8, "x": 0, "y": 10 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": {
-            "defaults": { "unit": "none", "decimals": 0 }
+            "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
           },
-          "transformations": [
-            { "id": "merge", "options": {} }
-          ],
+          "options": { "graphMode": "none", "textMode": "value" },
           "targets": [
             {
               "expr": "zaino_sync_finalized_height{namespace=\"$namespace\"}",
-              "legendFormat": "Finalized",
-              "instant": true,
-              "format": "table"
-            },
+              "legendFormat": "Finalized Height"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Target Height",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 8, "x": 8, "y": 10 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-blue" } }
+          },
+          "options": { "graphMode": "none", "textMode": "value" },
+          "targets": [
             {
               "expr": "zaino_sync_target_height{namespace=\"$namespace\"}",
-              "legendFormat": "Target",
-              "instant": true,
-              "format": "table"
-            },
+              "legendFormat": "Target Height"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "Chain Tip",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 8, "x": 16, "y": 10 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-orange" } }
+          },
+          "options": { "graphMode": "none", "textMode": "value" },
+          "targets": [
             {
               "expr": "zaino_chain_tip_height{namespace=\"$namespace\"}",
-              "legendFormat": "Chain Tip",
-              "instant": true,
-              "format": "table"
+              "legendFormat": "Chain Tip"
             }
           ]
         }
