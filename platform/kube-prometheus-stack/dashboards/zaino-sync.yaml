@@ -139,7 +139,7 @@ data:
           "gridPos": { "h": 4, "w": 8, "x": 0, "y": 10 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": {
-            "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
+            "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
           },
           "options": { "graphMode": "none", "textMode": "value" },
           "targets": [
@@ -156,7 +156,7 @@ data:
           "gridPos": { "h": 4, "w": 8, "x": 8, "y": 10 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": {
-            "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-blue" } }
+            "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-blue" } }
           },
           "options": { "graphMode": "none", "textMode": "value" },
           "targets": [
@@ -173,7 +173,7 @@ data:
           "gridPos": { "h": 4, "w": 8, "x": 16, "y": 10 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": {
-            "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-orange" } }
+            "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-orange" } }
           },
           "options": { "graphMode": "none", "textMode": "value" },
           "targets": [
