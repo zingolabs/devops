@@ -6,6 +6,8 @@ zebra:
   name: zebra
   testnet: false
   replicas: 1
+  image:
+    tag: "4.4.1"
   storageClassName: topolvm-thin
   volumes:
     data:
