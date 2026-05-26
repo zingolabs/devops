@@ -73,8 +73,15 @@ spec:
                   value: "{{inputs.parameters.registry}}"
                 - name: tag
                   value: "{{inputs.parameters.tag}}"
+        - - name: check-image
+            template: check-image
+            arguments:
+              parameters:
+                - name: image
+                  value: "{{steps.resolve-tag.outputs.parameters.image}}"
         - - name: build-image
             template: buildkit
+            when: "{{steps.check-image.outputs.parameters.exists}} == false"
             arguments:
               parameters:
                 - name: ref
@@ -119,6 +126,30 @@ spec:
           - name: image
             valueFrom:
               path: /tmp/image
+
+    - name: check-image
+      inputs:
+        parameters:
+          - name: image
+      container:
+        image: busybox
+        command: [sh, -c]
+        args:
+          - |
+            REPO=$(echo "{{inputs.parameters.image}}" | cut -d: -f1)
+            TAG=$(echo "{{inputs.parameters.image}}" | cut -d: -f2)
+            if wget -q --spider "https://hub.docker.com/v2/repositories/${REPO}/tags/${TAG}" 2>/dev/null; then
+              echo "Image {{inputs.parameters.image}} found in registry — skipping build"
+              echo -n "true" > /tmp/exists
+            else
+              echo "Image {{inputs.parameters.image}} not in registry — build required"
+              echo -n "false" > /tmp/exists
+            fi
+      outputs:
+        parameters:
+          - name: exists
+            valueFrom:
+              path: /tmp/exists
 
     - name: buildkit
       inputs:
