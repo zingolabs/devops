@@ -38,18 +38,24 @@ spec:
               exit 1
             fi
 
-            # Clean up cluster-scoped VolumeSnapshotContents referencing this namespace.
-            # Safe because these are created with deletionPolicy: Retain — deleting
-            # the VSC removes only the Kubernetes reference object, NOT the underlying
-            # LVM snapshot on disk. The golden namespace's VSC and any provisioned PVCs
-            # are completely independent and unaffected.
-            echo "Cleaning up VolumeSnapshotContents referencing $NS..."
-            kubectl get volumesnapshotcontent -o jsonpath='{range .items[?(@.spec.volumeSnapshotRef.namespace=="'$NS'")]}{.metadata.name}{"\n"}{end}' | while read -r vsc; do
-              [ -z "$vsc" ] && continue
-              echo "  Deleting VolumeSnapshotContent: $vsc"
-              kubectl delete volumesnapshotcontent "$vsc"
-            done
+            # Collect cluster-scoped VSC names before deleting the namespace,
+            # because the namespace-scoped VolumeSnapshots they reference will
+            # be cascade-deleted along with it.
+            echo "Collecting VolumeSnapshotContents referencing $NS..."
+            VSCS=$(kubectl get volumesnapshotcontent -o jsonpath='{range .items[?(@.spec.volumeSnapshotRef.namespace=="'$NS'")]}{.metadata.name}{"\n"}{end}')
 
+            # Delete namespace first — this cascades to all namespace-scoped
+            # resources (VolumeSnapshots, PVCs, pods, etc), allowing their
+            # finalizers to resolve while the backing VSC still exists.
             echo "Deleting ephemeral namespace: $NS"
             kubectl delete namespace "$NS" --wait=true
+
+            # Now clean up the orphaned cluster-scoped VSCs.
+            # Safe because deletionPolicy: Retain means this only removes
+            # the Kubernetes object, not the underlying LVM snapshot.
+            echo "$VSCS" | while read -r vsc; do
+              [ -z "$vsc" ] && continue
+              echo "  Deleting VolumeSnapshotContent: $vsc"
+              kubectl delete volumesnapshotcontent "$vsc" --ignore-not-found
+            done
             echo "Cleanup complete."
