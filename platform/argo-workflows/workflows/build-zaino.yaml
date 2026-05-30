@@ -73,6 +73,8 @@ spec:
                   value: "{{inputs.parameters.registry}}"
                 - name: tag
                   value: "{{inputs.parameters.tag}}"
+                - name: no-tls
+                  value: "{{inputs.parameters.no-tls}}"
         - - name: check-image
             template: check-image
             arguments:
@@ -104,6 +106,8 @@ spec:
           - name: ref
           - name: registry
           - name: tag
+          - name: no-tls
+            default: "true"
       container:
         image: busybox
         command: [sh, -c]
@@ -112,6 +116,9 @@ spec:
             TAG="{{inputs.parameters.tag}}"
             if [ -z "$TAG" ]; then
               TAG=$(echo "{{inputs.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            fi
+            if [ "{{inputs.parameters.no-tls}}" = "true" ]; then
+              TAG="${TAG}-no-tls"
             fi
             IMAGE="{{inputs.parameters.registry}}:${TAG}"
             echo "Resolved tag: $TAG"
