@@ -1,5 +1,5 @@
 # Ephemeral Deploy Workflow
-# Creates a test deployment from a snapshot using zcash-stack helm chart
+# Creates an isolated zaino+zebra test deployment from golden snapshots.
 #
 # Cross-namespace snapshot restore:
 #   VolumeSnapshots are namespace-scoped, but VolumeSnapshotContent is cluster-scoped.
@@ -7,8 +7,18 @@
 #   that reference the same underlying snapshotHandle from the source snapshots.
 #
 # Usage:
+#   # Mainnet with defaults (fresh zaino, cached zebra):
 #   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
-#     -p namespace=ephemeral-test
+#     -p namespace=test-rc1 -p network=mainnet -p zaino-tag=0.4.0-rc.1-no-tls
+#
+#   # Mainnet with cached zaino + specific zebra:
+#   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
+#     -p namespace=test-cached -p network=mainnet \
+#     -p zaino-tag=0.4.0-rc.2-no-tls -p use-zaino-cache=true
+#
+#   # Testnet (legacy behavior):
+#   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
+#     -p namespace=ephemeral-test -p network=testnet
 #
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
@@ -21,43 +31,84 @@ spec:
   arguments:
     parameters:
       - name: namespace
-        value: ephemeral-test
+        value: ""
+      - name: network
+        value: mainnet
+      - name: zaino-tag
+        value: ""
+      - name: zebra-tag
+        value: ""
+      - name: zebra-hash
+        value: ""
+      - name: use-zaino-cache
+        value: "false"
       - name: release-name
-        value: ephemeral
-      # Source namespace where golden snapshots live
-      - name: source-namespace
-        value: zcash
-      # Snapshots to restore from (must exist in source-namespace)
-      - name: zebra-snapshot
-        value: zebra-testnet-data-zebra-testnet-0-snapshot-dqrkh
-      - name: zaino-snapshot
-        value: data-zaino-testnet-0-snapshot-ms8jh
+        value: zaino
 
   templates:
     - name: deploy
       steps:
+        - - name: resolve-params
+            template: resolve-params
         - - name: create-namespace
             template: ensure-namespace
-        - - name: clone-zebra-snapshot
+          - name: clone-zebra-snapshot
             template: clone-snapshot
             arguments:
               parameters:
+                - name: source-namespace
+                  value: "golden-{{workflow.parameters.network}}"
                 - name: source-snapshot
-                  value: "{{workflow.parameters.zebra-snapshot}}"
+                  value: "{{steps.resolve-params.outputs.parameters.zebra-snapshot}}"
                 - name: target-snapshot
                   value: "zebra-snapshot"
           - name: clone-zaino-snapshot
             template: clone-snapshot
+            when: "'{{workflow.parameters.use-zaino-cache}}' == 'true'"
             arguments:
               parameters:
+                - name: source-namespace
+                  value: "golden-{{workflow.parameters.network}}"
                 - name: source-snapshot
-                  value: "{{workflow.parameters.zaino-snapshot}}"
+                  value: "{{steps.resolve-params.outputs.parameters.zaino-snapshot}}"
                 - name: target-snapshot
                   value: "zaino-snapshot"
         - - name: helm-install
             template: helm-install
+        - - name: fix-permissions
+            template: fix-permissions
         - - name: report
             template: report-endpoint
+
+    # Resolve latest snapshots from golden namespace
+    - name: resolve-params
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            GOLDEN_NS="golden-{{workflow.parameters.network}}"
+
+            # Find latest zebra snapshot
+            ZEBRA_SNAP=$(kubectl get volumesnapshot -n "$GOLDEN_NS" \
+              -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep '^zebra-' | tail -1)
+            echo "Resolved zebra snapshot: $ZEBRA_SNAP"
+            echo -n "$ZEBRA_SNAP" > /tmp/zebra-snapshot
+
+            # Find latest zaino snapshot
+            ZAINO_SNAP=$(kubectl get volumesnapshot -n "$GOLDEN_NS" \
+              -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep '^data-zaino-' | tail -1)
+            echo "Resolved zaino snapshot: $ZAINO_SNAP"
+            echo -n "$ZAINO_SNAP" > /tmp/zaino-snapshot
+      outputs:
+        parameters:
+          - name: zebra-snapshot
+            valueFrom:
+              path: /tmp/zebra-snapshot
+          - name: zaino-snapshot
+            valueFrom:
+              path: /tmp/zaino-snapshot
 
     - name: ensure-namespace
       container:
@@ -66,11 +117,17 @@ spec:
         args:
           - |
             kubectl create namespace {{workflow.parameters.namespace}} --dry-run=client -o yaml | kubectl apply -f -
-            kubectl label namespace {{workflow.parameters.namespace}} zcash-stack/ephemeral=true --overwrite
+            SAFE_REF=$(echo "{{workflow.parameters.zaino-tag}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            kubectl label namespace {{workflow.parameters.namespace}} \
+              zcash-stack/ephemeral=true \
+              zcash-stack/network={{workflow.parameters.network}} \
+              zcash-stack/ref="$SAFE_REF" \
+              --overwrite
 
     - name: clone-snapshot
       inputs:
         parameters:
+          - name: source-namespace
           - name: source-snapshot
           - name: target-snapshot
       container:
@@ -79,12 +136,11 @@ spec:
         args:
           - |
             set -e
-            SOURCE_NS="{{workflow.parameters.source-namespace}}"
+            SOURCE_NS="{{inputs.parameters.source-namespace}}"
             TARGET_NS="{{workflow.parameters.namespace}}"
             SOURCE_SNAP="{{inputs.parameters.source-snapshot}}"
             TARGET_SNAP="{{inputs.parameters.target-snapshot}}"
 
-            # Get the VolumeSnapshotContent name for the source snapshot
             VSC_NAME=$(kubectl get volumesnapshot "$SOURCE_SNAP" -n "$SOURCE_NS" \
               -o jsonpath='{.status.boundVolumeSnapshotContentName}')
 
@@ -93,25 +149,23 @@ spec:
               exit 1
             fi
 
-            # Get snapshotHandle and other details from the VolumeSnapshotContent
             SNAPSHOT_HANDLE=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
               -o jsonpath='{.status.snapshotHandle}')
             DRIVER=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
               -o jsonpath='{.spec.driver}')
             SNAPSHOT_CLASS=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
               -o jsonpath='{.spec.volumeSnapshotClassName}')
-            RESTORE_SIZE=$(kubectl get volumesnapshotcontent "$VSC_NAME" \
-              -o jsonpath='{.status.restoreSize}')
 
             echo "Cloning snapshot:"
             echo "  Source: $SOURCE_NS/$SOURCE_SNAP"
             echo "  Target: $TARGET_NS/$TARGET_SNAP"
             echo "  SnapshotHandle: $SNAPSHOT_HANDLE"
-            echo "  RestoreSize: $RESTORE_SIZE"
 
-            # Create new VolumeSnapshotContent pointing to target namespace
             TARGET_VSC_NAME="${TARGET_SNAP}-content-${TARGET_NS}"
-            cat <<EOF | kubectl apply -f -
+            kubectl delete volumesnapshot "$TARGET_SNAP" -n "$TARGET_NS" --ignore-not-found --wait=true
+            kubectl delete volumesnapshotcontent "$TARGET_VSC_NAME" --ignore-not-found --wait=true
+
+            cat <<EOF | kubectl create -f -
             apiVersion: snapshot.storage.k8s.io/v1
             kind: VolumeSnapshotContent
             metadata:
@@ -129,8 +183,7 @@ spec:
                 namespace: ${TARGET_NS}
             EOF
 
-            # Create VolumeSnapshot in target namespace
-            cat <<EOF | kubectl apply -f -
+            cat <<EOF | kubectl create -f -
             apiVersion: snapshot.storage.k8s.io/v1
             kind: VolumeSnapshot
             metadata:
@@ -142,11 +195,8 @@ spec:
               volumeSnapshotClassName: ${SNAPSHOT_CLASS}
             EOF
 
-            # Wait for snapshot to be ready
-            echo "Waiting for snapshot to be ready..."
             kubectl wait volumesnapshot "$TARGET_SNAP" -n "$TARGET_NS" \
               --for=jsonpath='{.status.readyToUse}'=true --timeout=60s
-
             echo "Snapshot $TARGET_SNAP ready in $TARGET_NS"
 
     - name: helm-install
@@ -157,14 +207,43 @@ spec:
           - |
             set -e
             apk add --no-cache git
+
+            NETWORK="{{workflow.parameters.network}}"
+            ZAINO_TAG="{{workflow.parameters.zaino-tag}}"
+            ZEBRA_TAG="{{workflow.parameters.zebra-tag}}"
+            ZEBRA_HASH="{{workflow.parameters.zebra-hash}}"
+            USE_ZAINO_CACHE="{{workflow.parameters.use-zaino-cache}}"
+
             git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
+
+            # Build --set flags for overrides
+            OVERRIDES=""
+            OVERRIDES="$OVERRIDES --set zebra.volumes.data.dataSource.name=zebra-snapshot"
+
+            if [ "$USE_ZAINO_CACHE" = "true" ]; then
+              OVERRIDES="$OVERRIDES --set zaino.volumes.data.dataSource.name=zaino-snapshot"
+            else
+              OVERRIDES="$OVERRIDES --set-json zaino.volumes.data.dataSource=null"
+            fi
+
+            if [ -n "$ZAINO_TAG" ]; then
+              OVERRIDES="$OVERRIDES --set zaino.image.tag=$ZAINO_TAG"
+            fi
+
+            if [ -n "$ZEBRA_TAG" ]; then
+              OVERRIDES="$OVERRIDES --set zebra.image.tag=$ZEBRA_TAG"
+            fi
+
+            if [ -n "$ZEBRA_HASH" ]; then
+              OVERRIDES="$OVERRIDES --set zebra.image.hash=$ZEBRA_HASH"
+            fi
+
             helm upgrade --install {{workflow.parameters.release-name}} \
               /tmp/zcash-stack/charts/zcash-stack \
               --namespace {{workflow.parameters.namespace}} \
-              -f /values/ephemeral-testnet.yaml \
-              --set zebra.volumes.data.dataSource.name=zebra-snapshot \
-              --set zaino.volumes.data.dataSource.name=zaino-snapshot \
-              --wait --timeout 10m
+              -f /values/ephemeral-${NETWORK}.yaml \
+              $OVERRIDES \
+              --wait=false
         volumeMounts:
           - name: values
             mountPath: /values
@@ -172,6 +251,16 @@ spec:
         - name: values
           configMap:
             name: ephemeral-values
+
+    # Fix init-perms for zaino >= 0.4.x (runs as UID 1000)
+    - name: fix-permissions
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            kubectl patch sts zaino -n {{workflow.parameters.namespace}} --type json \
+              -p '[{"op":"replace","path":"/spec/template/spec/initContainers/0/args/0","value":"mkdir -p /home/zaino/.cache/zaino\nchown -R 1000:1000 /home/zaino\n"}]' || true
 
     - name: report-endpoint
       container:
@@ -182,9 +271,13 @@ spec:
             echo "========================================"
             echo "Ephemeral deployment ready!"
             echo "========================================"
-            echo "Namespace: {{workflow.parameters.namespace}}"
-            echo "Zebra RPC: zebra.{{workflow.parameters.namespace}}.svc:18232"
+            echo "Network:    {{workflow.parameters.network}}"
+            echo "Namespace:  {{workflow.parameters.namespace}}"
             echo "Zaino gRPC: zaino.{{workflow.parameters.namespace}}.svc:8137"
+            echo "Zebra RPC:  zebra.{{workflow.parameters.namespace}}.svc:8232"
+            echo ""
+            echo "To monitor sync:"
+            echo "  ~/.local/share/zaino/benchmarks/sync-speed-monitor.sh {{workflow.parameters.namespace}} 60"
             echo ""
             echo "To cleanup:"
             echo "  argo submit --from workflowtemplate/cleanup-ephemeral -p namespace={{workflow.parameters.namespace}}"
