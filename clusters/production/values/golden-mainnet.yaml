@@ -7,8 +7,8 @@ zebra:
   testnet: false
   replicas: 1
   image:
-    tag: "5.0.0"
-    hash: "sha256:cfcdc088977ccd85562a60911845b24d962317c93d861b12aa1b98813f9f2374"
+    tag: "5.1.0"
+    hash: "sha256:6fe1536ee462ae3bdbbf3a054f4a1ca1fc4841b852ee26908d837b28c0d4f72c"
   storageClassName: topolvm-thin
   volumes:
     data:
