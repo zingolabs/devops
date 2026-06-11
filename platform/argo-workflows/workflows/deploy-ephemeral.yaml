@@ -7,16 +7,16 @@
 #   that reference the same underlying snapshotHandle from the source snapshots.
 #
 # Usage:
-#   # Mainnet with defaults (fresh zaino, cached zebra):
+#   # Fresh zaino sync with dedicated zebra:
 #   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
-#     -p namespace=test-rc1 -p network=mainnet -p zaino-tag=0.4.0-rc.1-no-tls
+#     -p namespace=test-rc1 -p zaino-tag=0.4.0-rc.1-no-tls
 #
-#   # Mainnet with cached zaino + specific zebra:
+#   # With cached zaino + specific zebra version:
 #   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
-#     -p namespace=test-cached -p network=mainnet \
-#     -p zaino-tag=0.4.0-rc.2-no-tls -p use-zaino-cache=true
+#     -p namespace=test-cached -p zaino-tag=0.4.0-rc.2-no-tls \
+#     -p zebra-tag=4.5.3 -p use-zaino-cache=true
 #
-#   # Testnet (legacy behavior):
+#   # Testnet:
 #   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
 #     -p namespace=ephemeral-test -p network=testnet
 #
@@ -37,8 +37,6 @@ spec:
       - name: zaino-tag
         value: ""
       - name: zebra-tag
-        value: ""
-      - name: zebra-hash
         value: ""
       - name: use-zaino-cache
         value: "false"
@@ -211,7 +209,6 @@ spec:
             NETWORK="{{workflow.parameters.network}}"
             ZAINO_TAG="{{workflow.parameters.zaino-tag}}"
             ZEBRA_TAG="{{workflow.parameters.zebra-tag}}"
-            ZEBRA_HASH="{{workflow.parameters.zebra-hash}}"
             USE_ZAINO_CACHE="{{workflow.parameters.use-zaino-cache}}"
 
             git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
@@ -232,10 +229,6 @@ spec:
 
             if [ -n "$ZEBRA_TAG" ]; then
               OVERRIDES="$OVERRIDES --set zebra.image.tag=$ZEBRA_TAG"
-            fi
-
-            if [ -n "$ZEBRA_HASH" ]; then
-              OVERRIDES="$OVERRIDES --set zebra.image.hash=$ZEBRA_HASH"
             fi
 
             helm upgrade --install {{workflow.parameters.release-name}} \
