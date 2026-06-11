@@ -1,15 +1,15 @@
 # Ephemeral Deploy Workflow
 # Creates an isolated zaino+zebra test deployment from golden snapshots.
-#
-# Cross-namespace snapshot restore:
-#   VolumeSnapshots are namespace-scoped, but VolumeSnapshotContent is cluster-scoped.
-#   We create new VolumeSnapshotContent + VolumeSnapshot pairs in the target namespace
-#   that reference the same underlying snapshotHandle from the source snapshots.
+# Optionally builds zaino from a git ref if no pre-built image exists.
 #
 # Usage:
-#   # Fresh zaino sync with dedicated zebra:
+#   # From a pre-built tag:
 #   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
-#     -p namespace=test-rc1 -p zaino-tag=0.4.0-rc.1-no-tls
+#     -p namespace=test-rc1 -p zaino-tag=0.4.0-rc.2-no-tls
+#
+#   # From a git ref (builds if needed):
+#   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
+#     -p namespace=bisect-1112 -p ref=760c1ca5
 #
 #   # With cached zaino + specific zebra version:
 #   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
@@ -34,8 +34,15 @@ spec:
         value: ""
       - name: network
         value: mainnet
+      # Provide either ref (builds image) or zaino-tag (uses existing image)
+      - name: ref
+        value: ""
       - name: zaino-tag
         value: ""
+      - name: no-tls
+        value: "true"
+      - name: registry
+        value: zingodevops/zaino
       - name: zebra-tag
         value: ""
       - name: use-zaino-cache
@@ -48,8 +55,27 @@ spec:
       steps:
         - - name: resolve-params
             template: resolve-params
+          - name: build-image
+            when: "'{{workflow.parameters.ref}}' != ''"
+            templateRef:
+              name: build-zaino
+              template: build
+            arguments:
+              parameters:
+                - name: ref
+                  value: "{{workflow.parameters.ref}}"
+                - name: no-tls
+                  value: "{{workflow.parameters.no-tls}}"
+                - name: registry
+                  value: "{{workflow.parameters.registry}}"
+                - name: tag
+                  value: ""
         - - name: create-namespace
             template: ensure-namespace
+            arguments:
+              parameters:
+                - name: image
+                  value: "{{steps.build-image.outputs.parameters.image}}"
           - name: clone-zebra-snapshot
             template: clone-snapshot
             arguments:
@@ -73,6 +99,10 @@ spec:
                   value: "zaino-snapshot"
         - - name: helm-install
             template: helm-install
+            arguments:
+              parameters:
+                - name: image
+                  value: "{{steps.build-image.outputs.parameters.image}}"
         - - name: fix-permissions
             template: fix-permissions
         - - name: report
@@ -109,13 +139,22 @@ spec:
               path: /tmp/zaino-snapshot
 
     - name: ensure-namespace
+      inputs:
+        parameters:
+          - name: image
+            default: ""
       container:
         image: bitnami/kubectl:latest
         command: [sh, -c]
         args:
           - |
             kubectl create namespace {{workflow.parameters.namespace}} --dry-run=client -o yaml | kubectl apply -f -
-            SAFE_REF=$(echo "{{workflow.parameters.zaino-tag}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+
+            # Use built image tag, zaino-tag param, or ref as label
+            REF="{{workflow.parameters.zaino-tag}}"
+            if [ -z "$REF" ]; then REF="{{workflow.parameters.ref}}"; fi
+            SAFE_REF=$(echo "$REF" | sed 's/[^a-zA-Z0-9._-]/-/g')
+
             kubectl label namespace {{workflow.parameters.namespace}} \
               zcash-stack/ephemeral=true \
               zcash-stack/network={{workflow.parameters.network}} \
@@ -198,6 +237,10 @@ spec:
             echo "Snapshot $TARGET_SNAP ready in $TARGET_NS"
 
     - name: helm-install
+      inputs:
+        parameters:
+          - name: image
+            default: ""
       container:
         image: alpine/helm:latest
         command: [sh, -c]
@@ -210,10 +253,10 @@ spec:
             ZAINO_TAG="{{workflow.parameters.zaino-tag}}"
             ZEBRA_TAG="{{workflow.parameters.zebra-tag}}"
             USE_ZAINO_CACHE="{{workflow.parameters.use-zaino-cache}}"
+            BUILT_IMAGE="{{inputs.parameters.image}}"
 
             git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
 
-            # Build --set flags for overrides
             OVERRIDES=""
             OVERRIDES="$OVERRIDES --set zebra.volumes.data.dataSource.name=zebra-snapshot"
 
@@ -223,7 +266,12 @@ spec:
               OVERRIDES="$OVERRIDES --set-json zaino.volumes.data.dataSource=null"
             fi
 
-            if [ -n "$ZAINO_TAG" ]; then
+            # Resolve zaino image: built image takes precedence over zaino-tag
+            if [ -n "$BUILT_IMAGE" ]; then
+              REPO=$(echo "$BUILT_IMAGE" | cut -d: -f1)
+              TAG=$(echo "$BUILT_IMAGE" | cut -d: -f2)
+              OVERRIDES="$OVERRIDES --set zaino.image.repository=$REPO --set zaino.image.tag=$TAG"
+            elif [ -n "$ZAINO_TAG" ]; then
               OVERRIDES="$OVERRIDES --set zaino.image.tag=$ZAINO_TAG"
             fi
 
