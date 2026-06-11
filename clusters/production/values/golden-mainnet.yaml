@@ -8,7 +8,7 @@ zebra:
   replicas: 1
   image:
     tag: "5.1.0"
-    hash: "sha256:6fe1536ee462ae3bdbbf3a054f4a1ca1fc4841b852ee26908d837b28c0d4f72c"
+    hash: "6fe1536ee462ae3bdbbf3a054f4a1ca1fc4841b852ee26908d837b28c0d4f72c"
   storageClassName: topolvm-thin
   volumes:
     data:
