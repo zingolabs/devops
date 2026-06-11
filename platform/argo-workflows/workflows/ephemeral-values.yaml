@@ -67,9 +67,10 @@ data:
             apiGroup: snapshot.storage.k8s.io
             # name is set via --set at deploy time
       requests:
-        cpu: 500m
-        memory: 1Gi
+        cpu: 1
+        memory: 2Gi
       limits:
+        cpu: 2
         memory: 24Gi
 
     zaino:
@@ -96,6 +97,7 @@ data:
         cpu: 1
         memory: 2Gi
       limits:
+        cpu: 2
         memory: 16Gi
 
     lightwalletd:
