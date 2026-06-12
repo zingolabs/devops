@@ -88,6 +88,8 @@ data:
       env:
         - name: ZAINO_METRICS_ENDPOINT
           value: "0.0.0.0:9998"
+      config:
+        dbSize: 96
       logging:
         format: json
         color: "false"
