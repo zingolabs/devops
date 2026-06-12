@@ -78,10 +78,16 @@ data:
       name: zaino
       replicas: 1
       rpcService: zebra
+      service:
+        port: 8137
+        metricsPort: 9998
       image:
         repository: zingodevops/zaino
         tag: 0.3.1-no-tls
         hash: ""
+      env:
+        - name: ZAINO_METRICS_ENDPOINT
+          value: "0.0.0.0:9998"
       logging:
         format: json
         color: "false"

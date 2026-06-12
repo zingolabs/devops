@@ -52,6 +52,8 @@ spec:
         value: ""
       - name: use-zaino-cache
         value: "false"
+      - name: metrics
+        value: "true"
       - name: release-name
         value: zaino
 
@@ -295,6 +297,11 @@ spec:
               OVERRIDES="$OVERRIDES --set zebra.image.tag=$ZEBRA_TAG"
             fi
 
+            # Disable metrics for older refs that don't support it
+            if [ "{{workflow.parameters.metrics}}" = "false" ]; then
+              OVERRIDES="$OVERRIDES --set-json zaino.service.metricsPort=null --set-json zaino.env=null"
+            fi
+
             helm upgrade --install {{workflow.parameters.release-name}} \
               /tmp/zcash-stack/charts/zcash-stack \
               --namespace {{workflow.parameters.namespace}} \
@@ -309,29 +316,15 @@ spec:
           configMap:
             name: ephemeral-values
 
-    # Post-deploy patches: fix UID, enable metrics, expose metrics port
+    # Post-deploy patches: fix UID for zaino >= 0.4.x
     - name: fix-permissions
       container:
         image: bitnami/kubectl:latest
         command: [sh, -c]
         args:
           - |
-            NS="{{workflow.parameters.namespace}}"
-
-            # Fix init-perms for zaino >= 0.4.x (runs as UID 1000)
-            kubectl patch sts zaino -n "$NS" --type json \
+            kubectl patch sts zaino -n {{workflow.parameters.namespace}} --type json \
               -p '[{"op":"replace","path":"/spec/template/spec/initContainers/0/args/0","value":"mkdir -p /home/zaino/.cache/zaino\nchown -R 1000:1000 /home/zaino\n"}]' || true
-
-            # Enable prometheus metrics endpoint
-            kubectl patch sts zaino -n "$NS" --type json \
-              -p '[{"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"ZAINO_METRICS_ENDPOINT","value":"0.0.0.0:9998"}}]' || true
-
-            # Expose metrics port on service
-            kubectl patch svc zaino -n "$NS" --type json \
-              -p '[{"op":"replace","path":"/spec/ports/0","value":{"name":"grpc","port":8137,"targetPort":8137,"protocol":"TCP"}},{"op":"add","path":"/spec/ports/-","value":{"name":"metrics","port":9998,"targetPort":9998,"protocol":"TCP"}}]' || true
-
-            # Restart pod to pick up changes
-            kubectl delete pod zaino-0 -n "$NS" --ignore-not-found || true
 
     - name: report-endpoint
       container:
