@@ -39,8 +39,8 @@ spec:
         value: ""
       - name: zaino-tag
         value: ""
-      - name: no-tls
-        value: "true"
+      - name: cargo-features
+        value: "no_tls_with_prometheus"
       - name: registry
         value: zingodevops/zaino
       - name: zebra-tag
@@ -69,8 +69,8 @@ spec:
               parameters:
                 - name: ref
                   value: "{{workflow.parameters.ref}}"
-                - name: no-tls
-                  value: "{{workflow.parameters.no-tls}}"
+                - name: cargo-features
+                  value: "{{workflow.parameters.cargo-features}}"
                 - name: registry
                   value: "{{workflow.parameters.registry}}"
                 - name: tag

@@ -39,8 +39,8 @@ spec:
     parameters:
       - name: ref
         value: dev
-      - name: no-tls
-        value: "true"
+      - name: cargo-features
+        value: "no_tls_with_prometheus"
       - name: registry
         value: zingodevops/zaino
       - name: tag
@@ -54,8 +54,8 @@ spec:
         parameters:
           - name: ref
             default: dev
-          - name: no-tls
-            default: "true"
+          - name: cargo-features
+            default: "no_tls_with_prometheus"
           - name: registry
             default: zingodevops/zaino
           - name: tag
@@ -73,8 +73,8 @@ spec:
                   value: "{{inputs.parameters.registry}}"
                 - name: tag
                   value: "{{inputs.parameters.tag}}"
-                - name: no-tls
-                  value: "{{inputs.parameters.no-tls}}"
+                - name: cargo-features
+                  value: "{{inputs.parameters.cargo-features}}"
         - - name: check-image
             template: check-image
             arguments:
@@ -88,8 +88,8 @@ spec:
               parameters:
                 - name: ref
                   value: "{{inputs.parameters.ref}}"
-                - name: no-tls
-                  value: "{{inputs.parameters.no-tls}}"
+                - name: cargo-features
+                  value: "{{inputs.parameters.cargo-features}}"
                 - name: rust-version
                   value: "{{inputs.parameters.rust-version}}"
                 - name: destination
@@ -106,8 +106,8 @@ spec:
           - name: ref
           - name: registry
           - name: tag
-          - name: no-tls
-            default: "true"
+          - name: cargo-features
+            default: "no_tls_with_prometheus"
       container:
         image: busybox
         command: [sh, -c]
@@ -117,8 +117,11 @@ spec:
             if [ -z "$TAG" ]; then
               TAG=$(echo "{{inputs.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
             fi
-            if [ "{{inputs.parameters.no-tls}}" = "true" ]; then
-              TAG="${TAG}-no-tls"
+            # Append feature suffix (e.g. no_tls_with_prometheus -> -no-tls-with-prometheus)
+            FEATURES="{{inputs.parameters.cargo-features}}"
+            if [ -n "$FEATURES" ]; then
+              SUFFIX=$(echo "$FEATURES" | sed 's/_/-/g')
+              TAG="${TAG}-${SUFFIX}"
             fi
             IMAGE="{{inputs.parameters.registry}}:${TAG}"
             echo "Resolved tag: $TAG"
@@ -162,8 +165,8 @@ spec:
       inputs:
         parameters:
           - name: ref
-          - name: no-tls
-            default: "true"
+          - name: cargo-features
+            default: "no_tls_with_prometheus"
           - name: rust-version
             default: "1.95.0"
           - name: destination
@@ -185,7 +188,7 @@ spec:
           - --opt
           - build-arg:RUST_VERSION={{inputs.parameters.rust-version}}
           - --opt
-          - build-arg:NO_TLS={{inputs.parameters.no-tls}}
+          - build-arg:CARGO_FEATURES={{inputs.parameters.cargo-features}}
           - --output
           - type=image,name={{inputs.parameters.destination}},push=true
         securityContext:

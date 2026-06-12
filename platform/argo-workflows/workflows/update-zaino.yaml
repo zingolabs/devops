@@ -19,8 +19,8 @@ spec:
       - name: ref
         value: dev
       - name: namespace
-      - name: no-tls
-        value: "true"
+      - name: cargo-features
+        value: "no_tls_with_prometheus"
       - name: registry
         value: zingodevops/zaino
       - name: rust-version
@@ -37,8 +37,8 @@ spec:
               parameters:
                 - name: ref
                   value: "{{workflow.parameters.ref}}"
-                - name: no-tls
-                  value: "{{workflow.parameters.no-tls}}"
+                - name: cargo-features
+                  value: "{{workflow.parameters.cargo-features}}"
                 - name: registry
                   value: "{{workflow.parameters.registry}}"
                 - name: tag
