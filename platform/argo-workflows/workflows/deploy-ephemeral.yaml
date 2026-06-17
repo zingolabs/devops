@@ -299,7 +299,7 @@ spec:
 
             # Disable metrics for older refs that don't support it
             if [ "{{workflow.parameters.metrics}}" = "false" ]; then
-              OVERRIDES="$OVERRIDES --set-json zaino.service.metricsPort=null --set-json zaino.env=null"
+              OVERRIDES="$OVERRIDES --set-json zaino.service.metricsPort=null --set-json zaino.extraEnv=null"
             fi
 
             helm upgrade --install {{workflow.parameters.release-name}} \

@@ -85,9 +85,11 @@ data:
         repository: zingodevops/zaino
         tag: 0.3.1-no-tls
         hash: ""
-      env:
+      extraEnv:
         - name: ZAINO_METRICS_ENDPOINT
           value: "0.0.0.0:9998"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://tempo.monitoring.svc:4317"
       config:
         dbSize: 96
       logging:
