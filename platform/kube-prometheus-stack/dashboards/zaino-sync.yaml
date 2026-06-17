@@ -194,6 +194,109 @@ data:
               "legendFormat": "Chain Tip"
             }
           ]
+        },
+        {
+          "id": 10,
+          "title": "Sync Throughput",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+          "collapsed": false
+        },
+        {
+          "id": 11,
+          "title": "Transactions / sec",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 15 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "decimals": 1,
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "spanNulls": true
+              },
+              "color": { "mode": "fixed", "fixedColor": "semi-dark-yellow" }
+            }
+          },
+          "targets": [
+            {
+              "expr": "rate(zaino_sync_transactions_total{namespace=\"$namespace\"}[5m])",
+              "legendFormat": "tx/s"
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "title": "Shielded Actions / sec",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 15 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "decimals": 1,
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "spanNulls": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Sapling outputs/s" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-purple" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Orchard actions/s" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-blue" } }
+                ]
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "rate(zaino_sync_sapling_outputs_total{namespace=\"$namespace\"}[5m])",
+              "legendFormat": "Sapling outputs/s"
+            },
+            {
+              "expr": "rate(zaino_sync_orchard_actions_total{namespace=\"$namespace\"}[5m])",
+              "legendFormat": "Orchard actions/s"
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "title": "Combined Shielded Throughput",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 15 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "decimals": 1,
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 20,
+                "spanNulls": true,
+                "gradientMode": "scheme"
+              },
+              "color": { "mode": "fixed", "fixedColor": "semi-dark-green" }
+            }
+          },
+          "targets": [
+            {
+              "expr": "rate(zaino_sync_sapling_outputs_total{namespace=\"$namespace\"}[5m]) + rate(zaino_sync_orchard_actions_total{namespace=\"$namespace\"}[5m])",
+              "legendFormat": "Shielded actions/s"
+            }
+          ]
         }
       ],
       "time": { "from": "now-1h", "to": "now" }

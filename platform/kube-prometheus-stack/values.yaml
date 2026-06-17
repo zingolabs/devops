@@ -43,6 +43,10 @@ grafana:
           filterByTraceID: true
         nodeGraph:
           enabled: true
+  grafana.ini:
+    server:
+      domain: monitoring-kube-prometheus-stack-grafana.vaquita-altair.ts.net
+      root_url: http://monitoring-kube-prometheus-stack-grafana.vaquita-altair.ts.net
   # Expose via Tailscale
   service:
     type: ClusterIP
