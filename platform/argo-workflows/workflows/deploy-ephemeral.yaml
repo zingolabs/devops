@@ -54,6 +54,8 @@ spec:
         value: "false"
       - name: metrics
         value: "true"
+      - name: force-build
+        value: "false"
       - name: release-name
         value: zaino
 
@@ -77,6 +79,8 @@ spec:
                   value: "{{workflow.parameters.registry}}"
                 - name: tag
                   value: ""
+                - name: force-build
+                  value: "{{workflow.parameters.force-build}}"
         - - name: create-namespace
             template: ensure-namespace
             arguments:

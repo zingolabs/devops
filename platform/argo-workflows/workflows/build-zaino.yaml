@@ -47,6 +47,8 @@ spec:
         value: ""
       - name: rust-version
         value: "1.95.0"
+      - name: force-build
+        value: "false"
 
   templates:
     - name: build
@@ -62,6 +64,8 @@ spec:
             default: ""
           - name: rust-version
             default: "1.95.0"
+          - name: force-build
+            default: "false"
       steps:
         - - name: resolve-tag
             template: resolve-tag
@@ -81,6 +85,8 @@ spec:
               parameters:
                 - name: image
                   value: "{{steps.resolve-tag.outputs.parameters.image}}"
+                - name: force-build
+                  value: "{{inputs.parameters.force-build}}"
         - - name: build-image
             template: buildkit
             when: "{{steps.check-image.outputs.parameters.exists}} == false"
@@ -141,19 +147,26 @@ spec:
       inputs:
         parameters:
           - name: image
+          - name: force-build
+            default: "false"
       container:
         image: busybox
         command: [sh, -c]
         args:
           - |
-            REPO=$(echo "{{inputs.parameters.image}}" | cut -d: -f1)
-            TAG=$(echo "{{inputs.parameters.image}}" | cut -d: -f2)
-            if wget -q --spider "https://hub.docker.com/v2/repositories/${REPO}/tags/${TAG}" 2>/dev/null; then
-              echo "Image {{inputs.parameters.image}} found in registry — skipping build"
-              echo -n "true" > /tmp/exists
-            else
-              echo "Image {{inputs.parameters.image}} not in registry — build required"
+            if [ "{{inputs.parameters.force-build}}" = "true" ]; then
+              echo "Force build requested — skipping cache check"
               echo -n "false" > /tmp/exists
+            else
+              REPO=$(echo "{{inputs.parameters.image}}" | cut -d: -f1)
+              TAG=$(echo "{{inputs.parameters.image}}" | cut -d: -f2)
+              if wget -q --spider "https://hub.docker.com/v2/repositories/${REPO}/tags/${TAG}" 2>/dev/null; then
+                echo "Image {{inputs.parameters.image}} found in registry — skipping build"
+                echo -n "true" > /tmp/exists
+              else
+                echo "Image {{inputs.parameters.image}} not in registry — build required"
+                echo -n "false" > /tmp/exists
+              fi
             fi
       outputs:
         parameters:
@@ -189,6 +202,8 @@ spec:
           - build-arg:RUST_VERSION={{inputs.parameters.rust-version}}
           - --opt
           - build-arg:CARGO_FEATURES={{inputs.parameters.cargo-features}}
+          - --opt
+          - build-arg:NO_TLS=true
           - --output
           - type=image,name={{inputs.parameters.destination}},push=true
         securityContext:
