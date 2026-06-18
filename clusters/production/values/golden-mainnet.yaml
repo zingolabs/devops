@@ -7,8 +7,8 @@ zebra:
   testnet: false
   replicas: 1
   image:
-    tag: "5.1.0"
-    hash: "6fe1536ee462ae3bdbbf3a054f4a1ca1fc4841b852ee26908d837b28c0d4f72c"
+    tag: "5.2.0"
+    hash: ""
   storageClassName: topolvm-thin
   volumes:
     data:
@@ -32,7 +32,7 @@ zaino:
   storageClassName: topolvm-thin
   image:
     repository: zingodevops/zaino
-    tag: 0.2.0-rc.6-no-tls
+    tag: 0.4.1-no-tls
     hash: ""
     pullPolicy: IfNotPresent
   volumes:
