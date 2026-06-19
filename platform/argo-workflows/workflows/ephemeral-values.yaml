@@ -56,8 +56,8 @@ data:
       testnet: false
       replicas: 1
       image:
-        tag: "5.1.0"
-        hash: "6fe1536ee462ae3bdbbf3a054f4a1ca1fc4841b852ee26908d837b28c0d4f72c"
+        tag: "5.2.0"
+        hash: "883cc4c341524edab34eec4a282679ce8b3603e3f337980f719b2728fd960616"
       storageClassName: topolvm-thin
       volumes:
         data:
