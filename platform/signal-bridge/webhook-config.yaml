@@ -14,3 +14,4 @@ data:
         {{ if index .Alert.Labels "namespace" }}**ns:** {{ index .Alert.Labels "namespace" }}{{ end }}{{ if index .Alert.Labels "pod" }}  **pod:** {{ index .Alert.Labels "pod" }}{{ end }}
         {{ if index .Alert.Annotations "summary" }}{{ index .Alert.Annotations "summary" }}{{ end }}
         {{ if index .Alert.Annotations "description" }}{{ index .Alert.Annotations "description" }}{{ end }}
+        `{{ .Alert.StartsAt }}`
