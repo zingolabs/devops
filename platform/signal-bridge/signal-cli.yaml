@@ -39,7 +39,7 @@ spec:
     spec:
       containers:
         - name: signal-cli
-          image: bbernhard/signal-cli-rest-api:0.97
+          image: bbernhard/signal-cli-rest-api:0.100
           env:
             - name: MODE
               value: json-rpc
