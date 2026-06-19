@@ -11,34 +11,40 @@ spec:
       rules:
         - alert: NodeMemoryHigh
           expr: |
-            (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.85
+            (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+              * on(instance) group_left(nodename) node_uname_info
+              > 0.85
           for: 5m
           labels:
             severity: warning
             alert_channel: infra
           annotations:
-            summary: "High memory usage on {{ $labels.instance }}"
-            description: "Memory usage is {{ $value | humanizePercentage }} on node {{ $labels.instance }}"
+            summary: "High memory usage on {{ $labels.nodename }}"
+            description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.nodename }}"
 
         - alert: NodeMemoryCritical
           expr: |
-            (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.95
+            (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+              * on(instance) group_left(nodename) node_uname_info
+              > 0.95
           for: 2m
           labels:
             severity: critical
             alert_channel: infra
           annotations:
-            summary: "Critical memory usage on {{ $labels.instance }}"
-            description: "Memory usage is {{ $value | humanizePercentage }} on node {{ $labels.instance }}"
+            summary: "Critical memory usage on {{ $labels.nodename }}"
+            description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.nodename }}"
 
         - alert: NodeSwapActive
           expr: |
-            node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes < 0.5
-            and node_memory_SwapTotal_bytes > 0
+            (node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes
+              and node_memory_SwapTotal_bytes > 0)
+              * on(instance) group_left(nodename) node_uname_info
+              < 0.5
           for: 10m
           labels:
             severity: warning
             alert_channel: infra
           annotations:
-            summary: "Heavy swap usage on {{ $labels.instance }}"
-            description: "Swap is {{ $value | humanizePercentage }} free on node {{ $labels.instance }}"
+            summary: "Heavy swap usage on {{ $labels.nodename }}"
+            description: "Swap is {{ $value | humanizePercentage }} free on {{ $labels.nodename }}"
