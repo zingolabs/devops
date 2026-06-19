@@ -86,10 +86,8 @@ data:
         tag: 0.3.1-no-tls
         hash: ""
       extraEnv:
-        - name: ZAINO_METRICS_ENDPOINT
-          value: "0.0.0.0:9998"
-        - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: "http://tempo.monitoring.svc:4317"
+        ZAINO_METRICS_ENDPOINT: "0.0.0.0:9998"
+        OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.monitoring.svc:4317"
       config:
         dbSize: 96
       logging:

@@ -58,6 +58,8 @@ spec:
         value: "false"
       - name: release-name
         value: zaino
+      - name: zaino-env
+        value: ""
 
   templates:
     - name: deploy
@@ -303,7 +305,18 @@ spec:
 
             # Disable metrics for older refs that don't support it
             if [ "{{workflow.parameters.metrics}}" = "false" ]; then
-              OVERRIDES="$OVERRIDES --set-json zaino.service.metricsPort=null --set-json zaino.extraEnv=null"
+              OVERRIDES="$OVERRIDES --set-json zaino.service.metricsPort=null --set-json 'zaino.extraEnv={}'"
+            fi
+
+            # Inject per-deployment env vars (comma-separated KEY=VALUE pairs)
+            ZAINO_ENV="{{workflow.parameters.zaino-env}}"
+            if [ -n "$ZAINO_ENV" ]; then
+              IFS=','
+              for pair in $ZAINO_ENV; do
+                KEY="${pair%%=*}"
+                VAL="${pair#*=}"
+                OVERRIDES="$OVERRIDES --set zaino.extraEnv.${KEY}=${VAL}"
+              done
             fi
 
             helm upgrade --install {{workflow.parameters.release-name}} \
