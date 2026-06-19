@@ -28,7 +28,9 @@ spec:
         - name: webhook
           image: schlauerlauer/alertmanager-webhook-signal:1.1.1
           command: ["./app"]
-          args: ["--config", "/config/config.yaml"]
+          env:
+            - name: CONFIG_PATH
+              value: /config/config.yaml
           ports:
             - name: http
               containerPort: 10000
