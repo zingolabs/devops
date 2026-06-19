@@ -1,0 +1,3 @@
+name: signal-bridge
+namespace: monitoring
+sourcePath: platform/signal-bridge

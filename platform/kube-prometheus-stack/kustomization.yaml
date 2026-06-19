@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - dashboards/zaino-sync.yaml
+  - alerts/zaino-alerts.yaml
 
 helmCharts:
   - name: kube-prometheus-stack

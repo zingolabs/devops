@@ -75,6 +75,22 @@ prometheus:
 
 # AlertManager
 alertmanager:
+  config:
+    route:
+      receiver: 'default'
+      routes:
+        - receiver: 'signal-zaino'
+          matchers:
+            - app = zaino
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+    receivers:
+      - name: 'default'
+      - name: 'signal-zaino'
+        webhook_configs:
+          - url: 'http://alertmanager-webhook-signal.monitoring.svc:10000/alertmanager'
+            send_resolved: true
   alertmanagerSpec:
     retention: 120h
     resources:

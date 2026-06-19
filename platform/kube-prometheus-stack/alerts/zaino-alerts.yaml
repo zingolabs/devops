@@ -1,0 +1,69 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: zaino-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: zaino.pods
+      rules:
+        - alert: ZainoOOMKilled
+          expr: |
+            kube_pod_container_status_last_terminated_reason{reason="OOMKilled", container="zaino"} > 0
+          for: 0m
+          labels:
+            severity: critical
+            app: zaino
+          annotations:
+            summary: "Zaino OOMKilled in {{ $labels.namespace }}"
+            description: "Container {{ $labels.container }} was OOMKilled in pod {{ $labels.pod }}"
+
+        - alert: ZainoHighRestarts
+          expr: |
+            increase(kube_pod_container_status_restarts_total{container="zaino"}[1h]) > 5
+          for: 0m
+          labels:
+            severity: critical
+            app: zaino
+          annotations:
+            summary: "Zaino crash-looping in {{ $labels.namespace }}"
+            description: "{{ $value | humanize }} restarts in the last hour"
+
+        - alert: ZainoPodNotReady
+          expr: |
+            kube_pod_status_ready{condition="true", pod=~"zaino.*"} == 0
+          for: 15m
+          labels:
+            severity: warning
+            app: zaino
+          annotations:
+            summary: "Zaino pod not ready in {{ $labels.namespace }}"
+            description: "Pod {{ $labels.pod }} has been not-ready for 15+ minutes"
+
+    - name: zaino.sync
+      rules:
+        - alert: ZainoSyncStalled
+          expr: |
+            rate(zaino_sync_finalized_height[10m]) == 0
+            and zaino_sync_finalized_height > 0
+          for: 10m
+          labels:
+            severity: warning
+            app: zaino
+          annotations:
+            summary: "Zaino sync stalled in {{ $labels.namespace }}"
+            description: "Finalized height has not increased for 10+ minutes"
+
+        - alert: ZainoSyncGapLarge
+          expr: |
+            (zaino_chain_tip_height - zaino_sync_finalized_height) > 1000
+            and zaino_sync_finalized_height > 0
+          for: 5m
+          labels:
+            severity: warning
+            app: zaino
+          annotations:
+            summary: "Zaino sync gap > 1000 blocks in {{ $labels.namespace }}"
+            description: "Gap: {{ $value | humanize }} blocks behind chain tip"

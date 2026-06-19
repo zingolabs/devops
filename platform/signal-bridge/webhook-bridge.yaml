@@ -1,0 +1,60 @@
+# alertmanager-webhook-signal: receives Alertmanager webhooks, forwards to Signal.
+#
+# The config (containing phone numbers) is stored as a SealedSecret.
+# To create/update:
+#   kubectl create secret generic webhook-signal-config -n monitoring \
+#     --from-file=config.yaml=config.yaml \
+#     --dry-run=client -o yaml \
+#     | kubeseal --controller-name=sealed-secrets --controller-namespace=kube-system -o yaml \
+#     > platform/signal-bridge/sealed-webhook-config.yaml
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager-webhook-signal
+  labels:
+    app: alertmanager-webhook-signal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager-webhook-signal
+  template:
+    metadata:
+      labels:
+        app: alertmanager-webhook-signal
+    spec:
+      containers:
+        - name: webhook
+          image: schlauerlauer/alertmanager-webhook-signal:1.1.1
+          args:
+            - --config=/config/config.yaml
+          ports:
+            - name: http
+              containerPort: 10000
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: config
+          secret:
+            secretName: webhook-signal-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager-webhook-signal
+spec:
+  selector:
+    app: alertmanager-webhook-signal
+  ports:
+    - name: http
+      port: 10000
+      targetPort: http
