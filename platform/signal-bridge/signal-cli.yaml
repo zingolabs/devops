@@ -1,12 +1,16 @@
 # signal-cli-rest-api: containerized Signal client with REST API.
 #
-# First-time setup (one-time, interactive):
-#   kubectl exec -it -n monitoring deploy/signal-cli -- signal-cli -a +1XXXXXXXXXX register
-#   kubectl exec -it -n monitoring deploy/signal-cli -- signal-cli -a +1XXXXXXXXXX verify <code>
+# Registration credentials are stored as a SealedSecret and restored to the PVC
+# by an init container on first boot. No manual registration needed.
 #
-# Or link to existing device:
-#   kubectl exec -it -n monitoring deploy/signal-cli -- signal-cli link -n "zaino-alerts"
-#   (scan QR code from Signal app)
+# To update credentials after a re-registration:
+#   kubectl exec -n monitoring deploy/signal-cli -- \
+#     tar czf - -C /home/.local/share/signal-cli data/ > /tmp/signal-cli-data.tar.gz
+#   kubectl create secret generic signal-cli-credentials -n monitoring \
+#     --from-file=data.tar.gz=/tmp/signal-cli-data.tar.gz \
+#     --dry-run=client -o yaml \
+#     | kubeseal --controller-name=sealed-secrets --controller-namespace=kube-system -o yaml \
+#     > platform/signal-bridge/sealed-signal-credentials.yaml
 #
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -37,6 +41,24 @@ spec:
       labels:
         app: signal-cli
     spec:
+      initContainers:
+        - name: restore-credentials
+          image: busybox:1.37
+          command: ["sh", "-c"]
+          args:
+            - |
+              if [ -f /data/data/accounts.json ]; then
+                echo "Credentials already present, skipping restore"
+              else
+                echo "Restoring credentials from sealed secret"
+                cd /data && tar xzf /credentials/data.tar.gz
+              fi
+          volumeMounts:
+            - name: config
+              mountPath: /data
+            - name: credentials
+              mountPath: /credentials
+              readOnly: true
       containers:
         - name: signal-cli
           image: bbernhard/signal-cli-rest-api:0.100
@@ -59,6 +81,9 @@ spec:
         - name: config
           persistentVolumeClaim:
             claimName: signal-cli-config
+        - name: credentials
+          secret:
+            secretName: signal-cli-credentials
 ---
 apiVersion: v1
 kind: Service

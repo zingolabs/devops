@@ -1,12 +1,15 @@
 # alertmanager-webhook-signal: receives Alertmanager webhooks, forwards to Signal.
 #
-# The config (containing phone numbers) is stored as a SealedSecret.
-# To create/update:
-#   kubectl create secret generic webhook-signal-config -n monitoring \
-#     --from-file=config.yaml=config.yaml \
+# Config is split: template + server settings in a ConfigMap (plaintext in git),
+# sensitive signal config (phone, group ID) in a SealedSecret. An init container
+# merges them into a single config.yaml at startup.
+#
+# To update secrets:
+#   kubectl create secret generic webhook-signal-secrets -n monitoring \
+#     --from-file=signal.yaml=signal.yaml \
 #     --dry-run=client -o yaml \
 #     | kubeseal --controller-name=sealed-secrets --controller-namespace=kube-system -o yaml \
-#     > platform/signal-bridge/sealed-webhook-config.yaml
+#     > platform/signal-bridge/sealed-webhook-secrets.yaml
 #
 apiVersion: apps/v1
 kind: Deployment
@@ -24,6 +27,21 @@ spec:
       labels:
         app: alertmanager-webhook-signal
     spec:
+      initContainers:
+        - name: merge-config
+          image: busybox:1.37
+          command: ["sh", "-c"]
+          args:
+            - cat /template/server.yaml /secrets/signal.yaml > /config/config.yaml
+          volumeMounts:
+            - name: template
+              mountPath: /template
+              readOnly: true
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
+            - name: config
+              mountPath: /config
       containers:
         - name: webhook
           image: schlauerlauer/alertmanager-webhook-signal:1.1.1
@@ -45,9 +63,14 @@ spec:
               mountPath: /config
               readOnly: true
       volumes:
-        - name: config
+        - name: template
+          configMap:
+            name: webhook-signal-template
+        - name: secrets
           secret:
-            secretName: webhook-signal-config
+            secretName: webhook-signal-secrets
+        - name: config
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

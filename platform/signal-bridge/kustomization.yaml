@@ -6,4 +6,6 @@ namespace: monitoring
 resources:
   - signal-cli.yaml
   - webhook-bridge.yaml
-  - sealed-webhook-config.yaml
+  - webhook-config.yaml
+  - sealed-webhook-secrets.yaml
+  - sealed-signal-credentials.yaml

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webhook-signal-template
+data:
+  server.yaml: |
+    server:
+      port: 10000
+      debug: false
+      interface: "0.0.0.0"
+    templates:
+      alertmanager: |
+        {{ if eq .Alert.Status "firing" }}❗{{ else }}✅{{ end }} **{{ .Alertname }}** {{ if eq .Alert.Status "resolved" }}resolved{{ end }}
+        {{ if index .Alert.Labels "namespace" }}**ns:** {{ index .Alert.Labels "namespace" }}{{ end }}{{ if index .Alert.Labels "pod" }}  **pod:** {{ index .Alert.Labels "pod" }}{{ end }}{{ if index .Alert.Labels "instance" }}  **node:** {{ index .Alert.Labels "instance" }}{{ end }}
+        {{ if index .Alert.Annotations "summary" }}{{ index .Alert.Annotations "summary" }}{{ end }}
+        {{ if index .Alert.Annotations "description" }}{{ index .Alert.Annotations "description" }}{{ end }}
