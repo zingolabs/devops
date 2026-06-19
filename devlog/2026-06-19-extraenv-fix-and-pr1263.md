@@ -45,3 +45,22 @@ PR#1263 (`rc_0_5_0_sync_hotfixes`) adds two new `[storage.database]` TOML config
 These can be overridden via env vars using zaino's `config-rs` layering (`ZAINO_` prefix, `__` separator for nesting). Old refs that don't have these struct fields ignore the env vars harmlessly. This is why we route them through `extraEnv` rather than modifying the TOML configmap template (which would break deploys of older refs).
 
 Planning two test deployments with different batch sizes (2 GiB and 8 GiB) against 16 GiB pods to find the right trade-off between OOM safety and sync throughput.
+
+## Deployment debugging
+
+Three bugs hit during the first deploy attempts:
+
+1. **IFS leak**: the `zaino-env` parsing loop set `IFS=','` but never restored it. The entire `$OVERRIDES` string was then treated as one word by the unquoted expansion in the helm command, giving `helm upgrade requires 2 arguments`.
+
+2. **Unresolved Argo template expression**: when using `zaino-tag` instead of `ref`, the `build-image` step is skipped but its output template `{{steps.build-image.outputs.parameters.image}}` is still passed as the `image` input to `helm-install`. The literal `{{...}}` string is non-empty, so the `if [ -n "$BUILT_IMAGE" ]` check enters the wrong branch. The curly braces then confuse Helm's `--set` parser (which treats `{` and `}` as list syntax), producing `key "}" has no value`. Fixed with a `case` guard that clears `BUILT_IMAGE` if it contains `{{`.
+
+3. **Buildkit lock contention**: submitting two workflows simultaneously caused the second buildkit pod to fail acquiring the lock. Solved by using `zaino-tag` (pre-built image) instead of `ref` for subsequent deploys after the first build.
+
+## Test deployments running
+
+Both deployed successfully against zebra 5.2.0 with PR#1263 (`8f4c234`):
+
+- **preview-1263-8f4c234-2g**: `sync_write_batch_size=2`, running, 0 restarts, metrics emitting
+- **preview-1263-8f4c234-8g**: `sync_write_batch_size=8`, running, 1 restart (early), metrics emitting
+
+Metrics confirmed reachable on pod IP:9998. Note: the zaino service template in zcash-stack still doesn't expose `metricsPort` — it's a pre-existing gap, only the gRPC port 8137 is in the Service spec.
