@@ -311,12 +311,13 @@ spec:
             # Inject per-deployment env vars (comma-separated KEY=VALUE pairs)
             ZAINO_ENV="{{workflow.parameters.zaino-env}}"
             if [ -n "$ZAINO_ENV" ]; then
-              IFS=','
+              OLDIFS="$IFS"; IFS=','
               for pair in $ZAINO_ENV; do
                 KEY="${pair%%=*}"
                 VAL="${pair#*=}"
                 OVERRIDES="$OVERRIDES --set zaino.extraEnv.${KEY}=${VAL}"
               done
+              IFS="$OLDIFS"
             fi
 
             helm upgrade --install {{workflow.parameters.release-name}} \
