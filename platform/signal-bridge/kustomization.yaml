@@ -6,5 +6,4 @@ namespace: monitoring
 resources:
   - signal-cli.yaml
   - webhook-bridge.yaml
-  # After sealed-secrets controller is running, generate and add:
-  # - sealed-webhook-config.yaml
+  - sealed-webhook-config.yaml

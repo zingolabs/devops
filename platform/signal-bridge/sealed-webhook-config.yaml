@@ -1,0 +1,12 @@
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: webhook-signal-config
+  namespace: monitoring
+spec:
+  encryptedData:
+    config.yaml: AgAvEVkHFzFGnZ4bQkROmIqAGDiYdgx5A3KxH1jcSmVGozBBttJSGLs/F88j1bNojnPO+MSfBap0U3h4ZlYJRBKlQDTPUp+DH2NUt3QUxRuWacSSyQP88GHSvxVZ0FvRl/gIhRve8dHNYmAhPTci9flb8arN72LG0I6zKrcJPGDwfcOX+XpX7ZCnbe9/IymYg2Yio4pu59UcODUfU0Lb1LqkAfpJbant7NXcwH7GZD47xhIqLifwgw/zCgNfZUYf09LfhqfffE7+lCN3Qe/AXCQyUIOfd9sEzzwXiNFMHt49UcHEB3nBMmzf/a/YdcdwtuWX6cf3AfCwTwumObohxyprRRHU2zTYMMUaNhYYBkNG3V1sGw6UICfNOK+ZOw9e4MEdiJO3bSWC/XA9WAgGiDpi/Tde0FdfL1x//5/Usf0dig2AUE/aVZYEKTISxjX04vQALlV+cmy0l90XwXYMFdpvVzc1twUCTlBaP2xKsPP1uV69+16QeDSxWuoz14zdNv/gLDPurVEtrHei+3SnI8f67fM1oQseGD3Twg0TtaBf9PJXozTMs6nUvqGeBQ9J7ro6L9U0nRey8Hg7yk1kSou+F+6lB84AJYT9AA/6iHRL5D8CJ4ltbngFdQheco6xYX9ozdt5ZX3GXinis/357nLZ1h3HFKP5MRZkAPI83V0g8+R4OYtAAPQ6v+W24JSHNliwtU2UYdauReOuMx3IMAj0Zt0aDXMa6goCilLX1lkP4AH3JGsTTGqBzNJVhknWZrTPvOwIU9cDdo9KQ2b2vJkIebvonWWs6v+HNvlG8iD9gT+L8iuNcNfjC9VmtIcqIXz+ndxHI8eYGh+ovw4pItw0oVHivl9PyXaUmzRx5axR4GKAXeypAItlxdOuV3Sy4/bse2kC9zqFwe83R8BEE2XkqUDnFzsO/d/qGwgBdvDzjkr7qIo8cw==
+  template:
+    metadata:
+      name: webhook-signal-config
+      namespace: monitoring
