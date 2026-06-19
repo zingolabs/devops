@@ -320,6 +320,8 @@ spec:
               IFS="$OLDIFS"
             fi
 
+            echo "DEBUG OVERRIDES: $OVERRIDES"
+
             helm upgrade --install {{workflow.parameters.release-name}} \
               /tmp/zcash-stack/charts/zcash-stack \
               --namespace {{workflow.parameters.namespace}} \
