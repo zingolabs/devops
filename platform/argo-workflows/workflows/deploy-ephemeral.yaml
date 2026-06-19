@@ -291,6 +291,8 @@ spec:
             fi
 
             # Resolve zaino image: built image takes precedence over zaino-tag
+            # Guard against unresolved Argo template expressions from skipped steps
+            case "$BUILT_IMAGE" in *"{{"*) BUILT_IMAGE="" ;; esac
             if [ -n "$BUILT_IMAGE" ]; then
               REPO=$(echo "$BUILT_IMAGE" | cut -d: -f1)
               TAG=$(echo "$BUILT_IMAGE" | cut -d: -f2)
@@ -319,8 +321,6 @@ spec:
               done
               IFS="$OLDIFS"
             fi
-
-            echo "DEBUG OVERRIDES: $OVERRIDES"
 
             helm upgrade --install {{workflow.parameters.release-name}} \
               /tmp/zcash-stack/charts/zcash-stack \
