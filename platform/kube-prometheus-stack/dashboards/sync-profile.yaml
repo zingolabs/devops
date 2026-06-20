@@ -33,7 +33,7 @@ data:
         {
           "id": 1,
           "title": "Sync Speed vs Block Height",
-          "description": "Blocks synced per minute as a function of chain height",
+          "description": "Blocks synced per minute as a function of chain height (15m smoothing)",
           "type": "xychart",
           "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -56,7 +56,7 @@ data:
               "refId": "A"
             },
             {
-              "expr": "rate(zaino_sync_finalized_height{namespace=\"$namespace\"}[5m]) * 60",
+              "expr": "rate(zaino_sync_finalized_height{namespace=\"$namespace\"}[15m]) * 60",
               "legendFormat": "blocks/min",
               "refId": "B"
             }
@@ -77,7 +77,7 @@ data:
         {
           "id": 2,
           "title": "Transaction Throughput vs Block Height",
-          "description": "Transactions indexed per second as a function of chain height",
+          "description": "Transactions indexed per second as a function of chain height (15m smoothing)",
           "type": "xychart",
           "gridPos": { "h": 12, "w": 12, "x": 0, "y": 12 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -100,7 +100,7 @@ data:
               "refId": "A"
             },
             {
-              "expr": "rate(zaino_sync_transactions_total{namespace=\"$namespace\"}[5m])",
+              "expr": "rate(zaino_sync_transactions_total{namespace=\"$namespace\"}[15m])",
               "legendFormat": "tx/s",
               "refId": "B"
             }
@@ -121,7 +121,7 @@ data:
         {
           "id": 3,
           "title": "Shielded Throughput vs Block Height",
-          "description": "Sapling outputs + Orchard actions per second as a function of chain height",
+          "description": "Sapling outputs + Orchard actions per second as a function of chain height (15m smoothing)",
           "type": "xychart",
           "gridPos": { "h": 12, "w": 12, "x": 12, "y": 12 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -157,12 +157,12 @@ data:
               "refId": "A"
             },
             {
-              "expr": "rate(zaino_sync_sapling_outputs_total{namespace=\"$namespace\"}[5m])",
+              "expr": "rate(zaino_sync_sapling_outputs_total{namespace=\"$namespace\"}[15m])",
               "legendFormat": "Sapling/s",
               "refId": "B"
             },
             {
-              "expr": "rate(zaino_sync_orchard_actions_total{namespace=\"$namespace\"}[5m])",
+              "expr": "rate(zaino_sync_orchard_actions_total{namespace=\"$namespace\"}[15m])",
               "legendFormat": "Orchard/s",
               "refId": "C"
             }
@@ -183,16 +183,18 @@ data:
         {
           "id": 4,
           "title": "Block Build Latency vs Block Height",
-          "description": "Time to fetch and build one indexed block as a function of chain height",
+          "description": "Time to fetch and build one indexed block as a function of chain height (log scale)",
           "type": "xychart",
           "gridPos": { "h": 12, "w": 12, "x": 0, "y": 24 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": {
             "defaults": {
+              "unit": "s",
               "custom": {
                 "show": "points",
                 "pointSize": { "fixed": 2 }
-              }
+              },
+              "scaleDistribution": { "type": "log", "log": 10 }
             },
             "overrides": [
               {
@@ -245,31 +247,19 @@ data:
         {
           "id": 5,
           "title": "RPC Latency vs Block Height",
-          "description": "Zebra RPC response time as a function of chain height being synced",
+          "description": "Zebra RPC response time as a function of chain height being synced (log scale)",
           "type": "xychart",
           "gridPos": { "h": 12, "w": 12, "x": 12, "y": 24 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": {
             "defaults": {
+              "unit": "s",
               "custom": {
                 "show": "points",
                 "pointSize": { "fixed": 2 }
-              }
-            },
-            "overrides": [
-              {
-                "matcher": { "id": "byName", "options": "p50" },
-                "properties": [
-                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
-                ]
               },
-              {
-                "matcher": { "id": "byName", "options": "p99" },
-                "properties": [
-                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-red" } }
-                ]
-              }
-            ]
+              "scaleDistribution": { "type": "log", "log": 10 }
+            }
           },
           "options": {
             "seriesMapping": "auto"
@@ -282,12 +272,12 @@ data:
             },
             {
               "expr": "rpc_request_duration_seconds{namespace=\"$namespace\", quantile=\"0.5\"}",
-              "legendFormat": "p50",
+              "legendFormat": "p50 {{method}}",
               "refId": "B"
             },
             {
               "expr": "rpc_request_duration_seconds{namespace=\"$namespace\", quantile=\"0.99\"}",
-              "legendFormat": "p99",
+              "legendFormat": "p99 {{method}}",
               "refId": "C"
             }
           ],
