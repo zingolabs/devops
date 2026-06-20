@@ -319,20 +319,33 @@ data:
         },
         {
           "id": 7,
-          "title": "Memory at Termination",
-          "description": "Container memory usage — spikes before restarts indicate OOM pressure",
+          "title": "Memory Pressure (% of limit)",
+          "description": "Memory usage as percentage of K8s limit — 100% = OOM kill",
           "type": "timeseries",
           "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": {
             "defaults": {
-              "unit": "bytes",
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1,
               "custom": {
                 "drawStyle": "line",
                 "lineWidth": 1,
-                "fillOpacity": 10,
-                "spanNulls": true
-              }
+                "fillOpacity": 15,
+                "spanNulls": true,
+                "gradientMode": "scheme",
+                "lineInterpolation": "smooth"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.7 },
+                  { "color": "red", "value": 0.9 }
+                ]
+              },
+              "color": { "mode": "continuous-GrYlRd" }
             }
           },
           "options": {
@@ -340,14 +353,9 @@ data:
           },
           "targets": [
             {
-              "expr": "container_memory_working_set_bytes{container=~\"zaino|zebra\", namespace=~\"$namespace\"}",
-              "legendFormat": "{{namespace}} / {{container}} (usage)",
+              "expr": "container_memory_working_set_bytes{container=~\"zaino|zebra\", namespace=~\"$namespace\"} / on(namespace, pod, container) kube_pod_container_resource_limits{container=~\"zaino|zebra\", namespace=~\"$namespace\", resource=\"memory\"}",
+              "legendFormat": "{{namespace}} / {{container}}",
               "refId": "A"
-            },
-            {
-              "expr": "kube_pod_container_resource_limits{container=~\"zaino|zebra\", namespace=~\"$namespace\", resource=\"memory\"}",
-              "legendFormat": "{{namespace}} / {{container}} (limit)",
-              "refId": "B"
             }
           ]
         },
