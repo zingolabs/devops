@@ -1,0 +1,79 @@
+{{- range .Values.users }}
+{{- $name := .name }}
+{{- $role := .role | default "view" }}
+{{- $scope := .scope | default "cluster" }}
+{{- $logs := .logs | default false }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: default
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}-token
+  namespace: default
+  annotations:
+    kubernetes.io/service-account.name: {{ $name }}
+type: kubernetes.io/service-account-token
+---
+{{- if eq (kindOf $scope) "string" }}
+# Cluster-wide binding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}-{{ $role }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $role }}
+{{- else }}
+# Per-namespace bindings
+{{- range $ns := $scope }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}-{{ $role }}
+  namespace: {{ $ns }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $role }}
+{{- end }}
+{{- end }}
+{{- if $logs }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}-logs
+rules:
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}-logs
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}-logs
+{{- end }}
+{{- end }}

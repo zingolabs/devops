@@ -1,0 +1,18 @@
+# Each entry generates: ServiceAccount + token Secret + RBAC binding
+#
+# Fields:
+#   name:       username (used for SA, secret, and binding names)
+#   role:       ClusterRole to bind (default: "view")
+#   scope:      "cluster" for cluster-wide, or a list of namespaces
+#   logs:       grant pod/log access (default: false) — not included in "view"
+#
+# Examples:
+#   - name: alice                          # cluster-wide view
+#   - name: bob                            # cluster-wide view + logs
+#     logs: true
+#   - name: carol                          # namespace-scoped view
+#     scope: [golden-mainnet, monitoring]
+
+users:
+  - name: zancas
+    logs: true
