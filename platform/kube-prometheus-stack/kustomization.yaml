@@ -3,6 +3,8 @@ kind: Kustomization
 
 resources:
   - dashboards/zaino-sync.yaml
+  - dashboards/zcash-stack.yaml
+  - dashboards/sync-profile.yaml
   - alerts/zaino-alerts.yaml
   - alerts/node-alerts.yaml
 

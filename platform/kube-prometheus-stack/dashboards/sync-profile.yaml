@@ -1,0 +1,321 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sync-profile-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  sync-profile.json: |
+    {
+      "uid": "sync-profile",
+      "title": "Sync Profile",
+      "tags": ["zaino", "zcash"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "templating": {
+        "list": [
+          {
+            "name": "namespace",
+            "type": "query",
+            "datasource": { "type": "prometheus", "uid": "prometheus" },
+            "query": "label_values(zaino_chain_tip_height, namespace)",
+            "refresh": 2,
+            "includeAll": false,
+            "current": {},
+            "sort": 1
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "title": "Sync Speed vs Block Height",
+          "description": "Blocks synced per minute as a function of chain height",
+          "type": "xychart",
+          "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "show": "points",
+                "pointSize": { "fixed": 2 }
+              },
+              "color": { "mode": "fixed", "fixedColor": "semi-dark-green" }
+            }
+          },
+          "options": {
+            "seriesMapping": "manual",
+            "series": [
+              {
+                "x": { "field": "Height" },
+                "y": { "field": "blocks/min" }
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "zaino_sync_finalized_height{namespace=\"$namespace\"}",
+              "legendFormat": "Height",
+              "refId": "A"
+            },
+            {
+              "expr": "rate(zaino_sync_finalized_height{namespace=\"$namespace\"}[5m]) * 60",
+              "legendFormat": "blocks/min",
+              "refId": "B"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "seriesToColumns",
+              "options": { "byField": "Time" }
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Transaction Throughput vs Block Height",
+          "description": "Transactions indexed per second as a function of chain height",
+          "type": "xychart",
+          "gridPos": { "h": 12, "w": 12, "x": 0, "y": 12 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "show": "points",
+                "pointSize": { "fixed": 2 }
+              },
+              "color": { "mode": "fixed", "fixedColor": "semi-dark-yellow" }
+            }
+          },
+          "options": {
+            "seriesMapping": "manual",
+            "series": [
+              {
+                "x": { "field": "Height" },
+                "y": { "field": "tx/s" }
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "zaino_sync_finalized_height{namespace=\"$namespace\"}",
+              "legendFormat": "Height",
+              "refId": "A"
+            },
+            {
+              "expr": "rate(zaino_sync_transactions_total{namespace=\"$namespace\"}[5m])",
+              "legendFormat": "tx/s",
+              "refId": "B"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "seriesToColumns",
+              "options": { "byField": "Time" }
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Shielded Throughput vs Block Height",
+          "description": "Sapling outputs + Orchard actions per second as a function of chain height",
+          "type": "xychart",
+          "gridPos": { "h": 12, "w": 12, "x": 12, "y": 12 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "show": "points",
+                "pointSize": { "fixed": 2 }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Sapling/s" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-purple" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Orchard/s" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-blue" } }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "seriesMapping": "manual",
+            "series": [
+              {
+                "x": { "field": "Height" },
+                "y": { "field": "Sapling/s" }
+              },
+              {
+                "x": { "field": "Height" },
+                "y": { "field": "Orchard/s" }
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "zaino_sync_finalized_height{namespace=\"$namespace\"}",
+              "legendFormat": "Height",
+              "refId": "A"
+            },
+            {
+              "expr": "rate(zaino_sync_sapling_outputs_total{namespace=\"$namespace\"}[5m])",
+              "legendFormat": "Sapling/s",
+              "refId": "B"
+            },
+            {
+              "expr": "rate(zaino_sync_orchard_actions_total{namespace=\"$namespace\"}[5m])",
+              "legendFormat": "Orchard/s",
+              "refId": "C"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "seriesToColumns",
+              "options": { "byField": "Time" }
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Block Build Latency vs Block Height",
+          "description": "Time to fetch and build one indexed block as a function of chain height",
+          "type": "xychart",
+          "gridPos": { "h": 12, "w": 12, "x": 0, "y": 24 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "show": "points",
+                "pointSize": { "fixed": 2 }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "p50" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "p99" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-red" } }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "seriesMapping": "manual",
+            "series": [
+              {
+                "x": { "field": "Height" },
+                "y": { "field": "p50" }
+              },
+              {
+                "x": { "field": "Height" },
+                "y": { "field": "p99" }
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "zaino_sync_finalized_height{namespace=\"$namespace\"}",
+              "legendFormat": "Height",
+              "refId": "A"
+            },
+            {
+              "expr": "zaino_sync_block_build_seconds{namespace=\"$namespace\", quantile=\"0.5\"}",
+              "legendFormat": "p50",
+              "refId": "B"
+            },
+            {
+              "expr": "zaino_sync_block_build_seconds{namespace=\"$namespace\", quantile=\"0.99\"}",
+              "legendFormat": "p99",
+              "refId": "C"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "seriesToColumns",
+              "options": { "byField": "Time" }
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "RPC Latency vs Block Height",
+          "description": "Zebra RPC response time as a function of chain height being synced",
+          "type": "xychart",
+          "gridPos": { "h": 12, "w": 12, "x": 12, "y": 24 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "show": "points",
+                "pointSize": { "fixed": 2 }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "p50" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "p99" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-red" } }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "seriesMapping": "manual",
+            "series": [
+              {
+                "x": { "field": "Height" },
+                "y": { "field": "p50" }
+              },
+              {
+                "x": { "field": "Height" },
+                "y": { "field": "p99" }
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "zaino_sync_finalized_height{namespace=\"$namespace\"}",
+              "legendFormat": "Height",
+              "refId": "A"
+            },
+            {
+              "expr": "rpc_request_duration_seconds{namespace=\"$namespace\", quantile=\"0.5\"}",
+              "legendFormat": "p50",
+              "refId": "B"
+            },
+            {
+              "expr": "rpc_request_duration_seconds{namespace=\"$namespace\", quantile=\"0.99\"}",
+              "legendFormat": "p99",
+              "refId": "C"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "seriesToColumns",
+              "options": { "byField": "Time" }
+            }
+          ]
+        }
+      ],
+      "time": { "from": "now-6h", "to": "now" }
+    }
