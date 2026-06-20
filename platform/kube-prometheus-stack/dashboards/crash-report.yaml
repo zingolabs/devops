@@ -190,6 +190,12 @@ data:
                 "properties": [
                   { "id": "custom.width", "value": 100 }
                 ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "exit code" },
+                "properties": [
+                  { "id": "custom.width", "value": 90 }
+                ]
               }
             ]
           },
@@ -199,35 +205,76 @@ data:
           },
           "targets": [
             {
-              "expr": "sort_desc(kube_pod_container_status_restarts_total{container=~\"zaino|zebra\", namespace=~\"$namespace\"} * on(namespace, pod, container) group_left(reason) (kube_pod_container_status_last_terminated_reason{container=~\"zaino|zebra\", namespace=~\"$namespace\"} == 1))",
+              "expr": "kube_pod_container_status_restarts_total{container=~\"zaino|zebra\", namespace=~\"$namespace\"}",
               "legendFormat": "",
               "refId": "A",
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "expr": "kube_pod_container_status_last_terminated_reason{container=~\"zaino|zebra\", namespace=~\"$namespace\"} == 1",
+              "legendFormat": "",
+              "refId": "B",
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "expr": "kube_pod_container_status_last_terminated_exitcode{container=~\"zaino|zebra\", namespace=~\"$namespace\"}",
+              "legendFormat": "",
+              "refId": "C",
               "instant": true,
               "format": "table"
             }
           ],
           "transformations": [
             {
+              "id": "seriesToColumns",
+              "options": { "byField": "pod" }
+            },
+            {
               "id": "organize",
               "options": {
                 "excludeByName": {
-                  "Time": true,
-                  "__name__": true,
-                  "endpoint": true,
-                  "instance": true,
-                  "job": true,
-                  "service": true,
-                  "uid": true
+                  "Time 1": true,
+                  "Time 2": true,
+                  "Time 3": true,
+                  "__name__ 1": true,
+                  "__name__ 2": true,
+                  "__name__ 3": true,
+                  "endpoint 1": true,
+                  "endpoint 2": true,
+                  "endpoint 3": true,
+                  "instance 1": true,
+                  "instance 2": true,
+                  "instance 3": true,
+                  "job 1": true,
+                  "job 2": true,
+                  "job 3": true,
+                  "service 1": true,
+                  "service 2": true,
+                  "service 3": true,
+                  "uid 1": true,
+                  "uid 2": true,
+                  "uid 3": true,
+                  "namespace 2": true,
+                  "namespace 3": true,
+                  "container 2": true,
+                  "container 3": true,
+                  "Value #B": true
                 },
                 "indexByName": {
-                  "namespace": 0,
+                  "namespace 1": 0,
                   "pod": 1,
-                  "container": 2,
+                  "container 1": 2,
                   "reason": 3,
-                  "Value": 4
+                  "Value #C": 4,
+                  "Value #A": 5
                 },
                 "renameByName": {
-                  "Value": "restarts"
+                  "namespace 1": "namespace",
+                  "container 1": "container",
+                  "Value #A": "restarts",
+                  "Value #C": "exit code"
                 }
               }
             }
