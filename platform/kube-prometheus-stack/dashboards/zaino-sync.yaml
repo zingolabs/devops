@@ -13,7 +13,7 @@ data:
       "tags": ["zaino", "zcash"],
       "timezone": "browser",
       "schemaVersion": 39,
-      "version": 1,
+      "version": 2,
       "refresh": "10s",
       "templating": {
         "list": [
@@ -295,6 +295,61 @@ data:
             {
               "expr": "rate(zaino_sync_sapling_outputs_total{namespace=\"$namespace\"}[5m]) + rate(zaino_sync_orchard_actions_total{namespace=\"$namespace\"}[5m])",
               "legendFormat": "Shielded actions/s"
+            }
+          ]
+        },
+        {
+          "id": 20,
+          "title": "Logs",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+          "collapsed": false
+        },
+        {
+          "id": 21,
+          "title": "Zaino logs",
+          "type": "logs",
+          "gridPos": { "h": 14, "w": 12, "x": 0, "y": 24 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "options": {
+            "showTime": true,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "sortOrder": "Descending"
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "{namespace=\"$namespace\", app=\"zaino\"}",
+              "queryType": "range"
+            }
+          ]
+        },
+        {
+          "id": 22,
+          "title": "Zebra logs",
+          "type": "logs",
+          "gridPos": { "h": 14, "w": 12, "x": 12, "y": 24 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "options": {
+            "showTime": true,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "sortOrder": "Descending"
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "{namespace=\"$namespace\", app=\"zebra\"}",
+              "queryType": "range"
             }
           ]
         }
