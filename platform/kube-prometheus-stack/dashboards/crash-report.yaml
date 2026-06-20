@@ -205,21 +205,21 @@ data:
           },
           "targets": [
             {
-              "expr": "kube_pod_container_status_restarts_total{container=~\"zaino|zebra\", namespace=~\"$namespace\"}",
+              "expr": "label_join(kube_pod_container_status_restarts_total{container=~\"zaino|zebra\", namespace=~\"$namespace\"}, \"key\", \"/\", \"namespace\", \"pod\", \"container\")",
               "legendFormat": "",
               "refId": "A",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "kube_pod_container_status_last_terminated_reason{container=~\"zaino|zebra\", namespace=~\"$namespace\"} == 1",
+              "expr": "label_join(kube_pod_container_status_last_terminated_reason{container=~\"zaino|zebra\", namespace=~\"$namespace\"} == 1, \"key\", \"/\", \"namespace\", \"pod\", \"container\")",
               "legendFormat": "",
               "refId": "B",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "kube_pod_container_status_last_terminated_exitcode{container=~\"zaino|zebra\", namespace=~\"$namespace\"}",
+              "expr": "label_join(kube_pod_container_status_last_terminated_exitcode{container=~\"zaino|zebra\", namespace=~\"$namespace\"}, \"key\", \"/\", \"namespace\", \"pod\", \"container\")",
               "legendFormat": "",
               "refId": "C",
               "instant": true,
@@ -229,7 +229,7 @@ data:
           "transformations": [
             {
               "id": "seriesToColumns",
-              "options": { "byField": "pod" }
+              "options": { "byField": "key" }
             },
             {
               "id": "organize",
@@ -256,15 +256,21 @@ data:
                   "uid 1": true,
                   "uid 2": true,
                   "uid 3": true,
+                  "key": true,
+                  "key 1": true,
+                  "key 2": true,
+                  "key 3": true,
                   "namespace 2": true,
                   "namespace 3": true,
                   "container 2": true,
                   "container 3": true,
+                  "pod 2": true,
+                  "pod 3": true,
                   "Value #B": true
                 },
                 "indexByName": {
                   "namespace 1": 0,
-                  "pod": 1,
+                  "pod 1": 1,
                   "container 1": 2,
                   "reason": 3,
                   "Value #C": 4,
@@ -272,6 +278,7 @@ data:
                 },
                 "renameByName": {
                   "namespace 1": "namespace",
+                  "pod 1": "pod",
                   "container 1": "container",
                   "Value #A": "restarts",
                   "Value #C": "exit code"
