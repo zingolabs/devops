@@ -293,6 +293,134 @@ data:
               }
             }
           ]
+        },
+        {
+          "id": 6,
+          "title": "Block Build Latency (current)",
+          "type": "table",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 4
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "quantile" },
+                "properties": [
+                  { "id": "custom.width", "value": 80 }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [{ "displayName": "quantile", "desc": false }]
+          },
+          "targets": [
+            {
+              "expr": "zaino_sync_block_build_seconds{namespace=\"$namespace\"}",
+              "legendFormat": "{{quantile}}",
+              "refId": "A",
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "component": true,
+                  "endpoint": true,
+                  "instance": true,
+                  "job": true,
+                  "managed_by": true,
+                  "name": true,
+                  "namespace": true,
+                  "pod": true,
+                  "service": true
+                },
+                "indexByName": {
+                  "quantile": 0,
+                  "Value": 1
+                },
+                "renameByName": {
+                  "Value": "latency"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "title": "RPC Latency by Method (current)",
+          "type": "table",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 4
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "method" },
+                "properties": [
+                  { "id": "custom.width", "value": 140 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "quantile" },
+                "properties": [
+                  { "id": "custom.width", "value": 80 }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [{ "displayName": "method", "desc": false }]
+          },
+          "targets": [
+            {
+              "expr": "rpc_request_duration_seconds{namespace=\"$namespace\"}",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "endpoint": true,
+                  "instance": true,
+                  "job": true,
+                  "managed_by": true,
+                  "name": true,
+                  "namespace": true,
+                  "pod": true,
+                  "service": true
+                },
+                "indexByName": {
+                  "method": 0,
+                  "quantile": 1,
+                  "Value": 2
+                },
+                "renameByName": {
+                  "Value": "latency"
+                }
+              }
+            }
+          ]
         }
       ],
       "time": { "from": "now-6h", "to": "now" }
