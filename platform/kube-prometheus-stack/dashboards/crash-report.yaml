@@ -353,7 +353,7 @@ data:
           },
           "targets": [
             {
-              "expr": "container_memory_working_set_bytes{container=~\"zaino|zebra\", namespace=~\"$namespace\"} / on(namespace, pod, container) kube_pod_container_resource_limits{container=~\"zaino|zebra\", namespace=~\"$namespace\", resource=\"memory\"}",
+              "expr": "container_memory_working_set_bytes{container=~\"zaino|zebra\", namespace=~\"$namespace\"} / on(namespace, pod, container) group_left() kube_pod_container_resource_limits{container=~\"zaino|zebra\", namespace=~\"$namespace\", resource=\"memory\"}",
               "legendFormat": "{{namespace}} / {{container}}",
               "refId": "A"
             }
