@@ -13,8 +13,20 @@ data:
       "tags": ["zaino", "zcash"],
       "timezone": "browser",
       "schemaVersion": 39,
-      "version": 2,
+      "version": 3,
       "refresh": "10s",
+      "links": [
+        {
+          "title": "Open logs view",
+          "type": "link",
+          "icon": "doc",
+          "tooltip": "Full logs explorer for this namespace",
+          "url": "/d/zcash-logs/zcash-stack-logs?var-namespace=${namespace}&${__url_time_range}",
+          "targetBlank": true,
+          "includeVars": false,
+          "keepTime": true
+        }
+      ],
       "templating": {
         "list": [
           {
@@ -26,6 +38,13 @@ data:
             "includeAll": false,
             "current": {},
             "sort": 1
+          },
+          {
+            "name": "logsearch",
+            "label": "Log search",
+            "type": "textbox",
+            "query": "",
+            "current": { "text": "", "value": "" }
           }
         ]
       },
@@ -311,6 +330,13 @@ data:
           "type": "logs",
           "gridPos": { "h": 14, "w": 12, "x": 0, "y": 24 },
           "datasource": { "type": "loki", "uid": "loki" },
+          "links": [
+            {
+              "title": "Open in full logs view",
+              "url": "/d/zcash-logs/zcash-stack-logs?var-namespace=${namespace}&var-service=zaino&var-search=${logsearch}&${__url_time_range}",
+              "targetBlank": true
+            }
+          ],
           "options": {
             "showTime": true,
             "showLabels": false,
@@ -324,7 +350,7 @@ data:
           "targets": [
             {
               "datasource": { "type": "loki", "uid": "loki" },
-              "expr": "{namespace=\"$namespace\", app=\"zaino\"}",
+              "expr": "{namespace=\"$namespace\", app=\"zaino\"} |= \"$logsearch\"",
               "queryType": "range"
             }
           ]
@@ -335,6 +361,13 @@ data:
           "type": "logs",
           "gridPos": { "h": 14, "w": 12, "x": 12, "y": 24 },
           "datasource": { "type": "loki", "uid": "loki" },
+          "links": [
+            {
+              "title": "Open in full logs view",
+              "url": "/d/zcash-logs/zcash-stack-logs?var-namespace=${namespace}&var-service=zebra&var-search=${logsearch}&${__url_time_range}",
+              "targetBlank": true
+            }
+          ],
           "options": {
             "showTime": true,
             "showLabels": false,
@@ -348,7 +381,7 @@ data:
           "targets": [
             {
               "datasource": { "type": "loki", "uid": "loki" },
-              "expr": "{namespace=\"$namespace\", app=\"zebra\"}",
+              "expr": "{namespace=\"$namespace\", app=\"zebra\"} |= \"$logsearch\"",
               "queryType": "range"
             }
           ]
