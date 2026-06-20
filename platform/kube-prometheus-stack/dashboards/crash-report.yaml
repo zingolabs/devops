@@ -289,26 +289,29 @@ data:
         },
         {
           "id": 6,
-          "title": "Restart Events",
-          "description": "Container restart rate over time per namespace/container",
+          "title": "Cumulative Restarts",
+          "description": "Total container restart count over time — each step up is one restart",
           "type": "timeseries",
           "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": {
             "defaults": {
+              "decimals": 0,
               "custom": {
-                "drawStyle": "points",
-                "pointSize": 6,
-                "spanNulls": false
+                "drawStyle": "line",
+                "lineInterpolation": "stepAfter",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "spanNulls": true
               }
             }
           },
           "options": {
-            "legend": { "showLegend": true, "displayMode": "table", "placement": "right", "calcs": ["sum"] }
+            "legend": { "showLegend": true, "displayMode": "table", "placement": "right", "calcs": ["last", "max"] }
           },
           "targets": [
             {
-              "expr": "increase(kube_pod_container_status_restarts_total{container=~\"zaino|zebra\", namespace=~\"$namespace\"}[$__rate_interval]) > 0",
+              "expr": "kube_pod_container_status_restarts_total{container=~\"zaino|zebra\", namespace=~\"$namespace\"}",
               "legendFormat": "{{namespace}} / {{container}}",
               "refId": "A"
             }
