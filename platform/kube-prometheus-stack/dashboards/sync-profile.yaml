@@ -47,13 +47,7 @@ data:
             }
           },
           "options": {
-            "seriesMapping": "manual",
-            "series": [
-              {
-                "x": { "field": "Height" },
-                "y": { "field": "blocks/min" }
-              }
-            ]
+            "seriesMapping": "auto"
           },
           "targets": [
             {
@@ -71,6 +65,12 @@ data:
             {
               "id": "seriesToColumns",
               "options": { "byField": "Time" }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "Time": true }
+              }
             }
           ]
         },
@@ -91,13 +91,7 @@ data:
             }
           },
           "options": {
-            "seriesMapping": "manual",
-            "series": [
-              {
-                "x": { "field": "Height" },
-                "y": { "field": "tx/s" }
-              }
-            ]
+            "seriesMapping": "auto"
           },
           "targets": [
             {
@@ -115,6 +109,12 @@ data:
             {
               "id": "seriesToColumns",
               "options": { "byField": "Time" }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "Time": true }
+              }
             }
           ]
         },
@@ -148,17 +148,7 @@ data:
             ]
           },
           "options": {
-            "seriesMapping": "manual",
-            "series": [
-              {
-                "x": { "field": "Height" },
-                "y": { "field": "Sapling/s" }
-              },
-              {
-                "x": { "field": "Height" },
-                "y": { "field": "Orchard/s" }
-              }
-            ]
+            "seriesMapping": "auto"
           },
           "targets": [
             {
@@ -181,6 +171,12 @@ data:
             {
               "id": "seriesToColumns",
               "options": { "byField": "Time" }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "Time": true }
+              }
             }
           ]
         },
@@ -214,17 +210,7 @@ data:
             ]
           },
           "options": {
-            "seriesMapping": "manual",
-            "series": [
-              {
-                "x": { "field": "Height" },
-                "y": { "field": "p50" }
-              },
-              {
-                "x": { "field": "Height" },
-                "y": { "field": "p99" }
-              }
-            ]
+            "seriesMapping": "auto"
           },
           "targets": [
             {
@@ -247,6 +233,12 @@ data:
             {
               "id": "seriesToColumns",
               "options": { "byField": "Time" }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "Time": true }
+              }
             }
           ]
         },
@@ -280,17 +272,7 @@ data:
             ]
           },
           "options": {
-            "seriesMapping": "manual",
-            "series": [
-              {
-                "x": { "field": "Height" },
-                "y": { "field": "p50" }
-              },
-              {
-                "x": { "field": "Height" },
-                "y": { "field": "p99" }
-              }
-            ]
+            "seriesMapping": "auto"
           },
           "targets": [
             {
@@ -313,6 +295,12 @@ data:
             {
               "id": "seriesToColumns",
               "options": { "byField": "Time" }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "Time": true }
+              }
             }
           ]
         }
