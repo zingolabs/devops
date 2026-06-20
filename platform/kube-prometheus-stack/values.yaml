@@ -45,13 +45,24 @@ grafana:
           enabled: true
   grafana.ini:
     server:
-      domain: monitoring-kube-prometheus-stack-grafana.vaquita-altair.ts.net
-      root_url: http://monitoring-kube-prometheus-stack-grafana.vaquita-altair.ts.net
-  # Expose via Tailscale
+      domain: grafana.vaquita-altair.ts.net
+      root_url: https://grafana.vaquita-altair.ts.net
+  # Tailnet-only access for admin login
   service:
     type: ClusterIP
     annotations:
       tailscale.com/expose: "true"
+  # Public access via Tailscale Funnel (only /public-dashboards/* works without auth)
+  ingress:
+    enabled: true
+    ingressClassName: tailscale
+    annotations:
+      tailscale.com/funnel: "true"
+    hosts:
+      - grafana
+    tls:
+      - hosts:
+          - grafana
 
 # Prometheus
 prometheus:
