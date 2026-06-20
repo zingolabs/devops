@@ -1,0 +1,358 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crash-report-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  crash-report.json: |
+    {
+      "uid": "crash-report",
+      "title": "Crash Report",
+      "tags": ["zaino", "zebra", "zcash", "ops"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "templating": {
+        "list": [
+          {
+            "name": "namespace",
+            "label": "Namespace",
+            "type": "query",
+            "datasource": { "type": "prometheus", "uid": "prometheus" },
+            "query": "label_values(kube_pod_container_status_restarts_total{container=~\"zaino|zebra\"}, namespace)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "current": { "selected": true, "text": "All", "value": "$__all" },
+            "sort": 1
+          }
+        ]
+      },
+      "annotations": {
+        "list": [
+          {
+            "datasource": { "type": "loki", "uid": "loki" },
+            "enable": true,
+            "expr": "{namespace=~\"$namespace\", app=~\"zaino|zebra\"} |~ \"(?i)assertion.*failed|panic|SIGSEGV|signal.*abort\"",
+            "name": "Crash Signal",
+            "iconColor": "red",
+            "titleFormat": "Crash: {{app}}",
+            "tagKeys": "app,namespace"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "title": "Crash Looping",
+          "description": "Pods currently in CrashLoopBackOff",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              },
+              "noValue": "0"
+            }
+          },
+          "options": { "graphMode": "none", "textMode": "value" },
+          "targets": [
+            {
+              "expr": "count(kube_pod_container_status_waiting_reason{container=~\"zaino|zebra\", namespace=~\"$namespace\", reason=\"CrashLoopBackOff\"} == 1) or vector(0)",
+              "legendFormat": "crash loops",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "OOMKilled",
+          "description": "Pods whose last termination was OOMKilled",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "fixed", "fixedColor": "semi-dark-purple" },
+              "noValue": "0"
+            }
+          },
+          "options": { "graphMode": "none", "textMode": "value" },
+          "targets": [
+            {
+              "expr": "count(kube_pod_container_status_last_terminated_reason{container=~\"zaino|zebra\", namespace=~\"$namespace\", reason=\"OOMKilled\"} == 1) or vector(0)",
+              "legendFormat": "oom",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Error (non-OOM)",
+          "description": "Pods whose last termination was Error (SIGSEGV, app crash, etc.)",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "fixed", "fixedColor": "semi-dark-orange" },
+              "noValue": "0"
+            }
+          },
+          "options": { "graphMode": "none", "textMode": "value" },
+          "targets": [
+            {
+              "expr": "count(kube_pod_container_status_last_terminated_reason{container=~\"zaino|zebra\", namespace=~\"$namespace\", reason=\"Error\"} == 1) or vector(0)",
+              "legendFormat": "errors",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Total Restarts",
+          "description": "Sum of all container restarts across fleet",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "fixed", "fixedColor": "semi-dark-red" },
+              "noValue": "0"
+            }
+          },
+          "options": { "graphMode": "area", "textMode": "value" },
+          "targets": [
+            {
+              "expr": "sum(kube_pod_container_status_restarts_total{container=~\"zaino|zebra\", namespace=~\"$namespace\"}) or vector(0)",
+              "legendFormat": "restarts",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Fleet Status",
+          "description": "All zaino/zebra pods with restart counts and last termination reason",
+          "type": "table",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "restarts" },
+                "properties": [
+                  { "id": "custom.width", "value": 90 },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        { "color": "green", "value": null },
+                        { "color": "yellow", "value": 1 },
+                        { "color": "red", "value": 10 }
+                      ]
+                    }
+                  },
+                  { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "reason" },
+                "properties": [
+                  { "id": "custom.width", "value": 120 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "namespace" },
+                "properties": [
+                  { "id": "custom.width", "value": 220 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "container" },
+                "properties": [
+                  { "id": "custom.width", "value": 100 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "pod" },
+                "properties": [
+                  { "id": "custom.width", "value": 100 }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [{ "displayName": "restarts", "desc": true }]
+          },
+          "targets": [
+            {
+              "expr": "sort_desc(kube_pod_container_status_restarts_total{container=~\"zaino|zebra\", namespace=~\"$namespace\"} * on(namespace, pod, container) group_left(reason) (kube_pod_container_status_last_terminated_reason{container=~\"zaino|zebra\", namespace=~\"$namespace\"} == 1))",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "endpoint": true,
+                  "instance": true,
+                  "job": true,
+                  "service": true,
+                  "uid": true
+                },
+                "indexByName": {
+                  "namespace": 0,
+                  "pod": 1,
+                  "container": 2,
+                  "reason": 3,
+                  "Value": 4
+                },
+                "renameByName": {
+                  "Value": "restarts"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "Restart Events",
+          "description": "Container restart rate over time per namespace/container",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "points",
+                "pointSize": 6,
+                "spanNulls": false
+              }
+            }
+          },
+          "options": {
+            "legend": { "showLegend": true, "displayMode": "table", "placement": "right", "calcs": ["sum"] }
+          },
+          "targets": [
+            {
+              "expr": "increase(kube_pod_container_status_restarts_total{container=~\"zaino|zebra\", namespace=~\"$namespace\"}[$__rate_interval]) > 0",
+              "legendFormat": "{{namespace}} / {{container}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "title": "Memory at Termination",
+          "description": "Container memory usage — spikes before restarts indicate OOM pressure",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 1,
+                "fillOpacity": 10,
+                "spanNulls": true
+              }
+            }
+          },
+          "options": {
+            "legend": { "showLegend": true, "displayMode": "table", "placement": "right", "calcs": ["max", "last"] }
+          },
+          "targets": [
+            {
+              "expr": "container_memory_working_set_bytes{container=~\"zaino|zebra\", namespace=~\"$namespace\"}",
+              "legendFormat": "{{namespace}} / {{container}} (usage)",
+              "refId": "A"
+            },
+            {
+              "expr": "kube_pod_container_resource_limits{container=~\"zaino|zebra\", namespace=~\"$namespace\", resource=\"memory\"}",
+              "legendFormat": "{{namespace}} / {{container}} (limit)",
+              "refId": "B"
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "title": "Crash Logs",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
+          "collapsed": false
+        },
+        {
+          "id": 8,
+          "title": "Critical — assertions, panics, signals, OOM",
+          "description": "Stderr and structured log lines matching crash signatures",
+          "type": "logs",
+          "gridPos": { "h": 12, "w": 24, "x": 0, "y": 29 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "options": {
+            "showTime": true,
+            "showLabels": true,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "sortOrder": "Descending"
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "{namespace=~\"$namespace\", app=~\"zaino|zebra\"} |~ \"(?i)assertion.*failed|panic|fatal|SIGSEGV|signal.*abort|OOMKilled|out of memory|mdb_|cannot allocate\"",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "title": "Warnings — sync retries, transport errors",
+          "description": "Structured WARN-level log lines that often precede crashes",
+          "type": "logs",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 41 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "options": {
+            "showTime": true,
+            "showLabels": true,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "sortOrder": "Descending"
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "{namespace=~\"$namespace\", app=~\"zaino|zebra\"} | json | level = `WARN`",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ]
+        }
+      ],
+      "time": { "from": "now-24h", "to": "now" }
+    }

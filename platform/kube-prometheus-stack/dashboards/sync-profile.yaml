@@ -29,7 +29,19 @@ data:
           }
         ]
       },
-      "panels": [
+      "annotations": {
+            "list": [
+              {
+                "datasource": { "type": "prometheus", "uid": "prometheus" },
+                "enable": true,
+                "expr": "increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\", container=\"zaino\"}[2m]) > 0",
+                "name": "Zaino Restart",
+                "iconColor": "red",
+                "titleFormat": "Zaino restarted"
+              }
+            ]
+          },
+          "panels": [
         {
           "id": 1,
           "title": "Sync Speed vs Block Height",

@@ -6,6 +6,7 @@ resources:
   - dashboards/zcash-stack.yaml
   - dashboards/sync-profile.yaml
   - dashboards/zcash-logs.yaml
+  - dashboards/crash-report.yaml
   - alerts/zaino-alerts.yaml
   - alerts/node-alerts.yaml
 
