@@ -34,13 +34,12 @@ data:
       "annotations": {
         "list": [
           {
-            "datasource": { "type": "loki", "uid": "loki" },
+            "datasource": { "type": "prometheus", "uid": "prometheus" },
             "enable": true,
-            "expr": "{namespace=~\"$namespace\", app=~\"zaino|zebra\"} |~ \"(?i)assertion.*failed|panic|SIGSEGV|signal.*abort\"",
-            "name": "Crash Signal",
+            "expr": "increase(kube_pod_container_status_restarts_total{container=~\"zaino|zebra\", namespace=~\"$namespace\"}[2m]) > 0",
+            "name": "Container Restart",
             "iconColor": "red",
-            "titleFormat": "Crash: {{namespace}} / {{app}}",
-            "tagKeys": "app,namespace"
+            "titleFormat": "Restart: {{namespace}} / {{container}}"
           }
         ]
       },
