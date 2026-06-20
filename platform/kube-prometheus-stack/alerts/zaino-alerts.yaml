@@ -11,7 +11,8 @@ spec:
       rules:
         - alert: ZainoOOMKilled
           expr: |
-            kube_pod_container_status_last_terminated_reason{reason="OOMKilled", container="zaino"} > 0
+            increase(kube_pod_container_status_restarts_total{container="zaino"}[10m]) > 0
+            and kube_pod_container_status_last_terminated_reason{reason="OOMKilled", container="zaino"} > 0
           for: 0m
           labels:
             severity: critical
