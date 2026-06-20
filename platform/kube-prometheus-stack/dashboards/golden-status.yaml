@@ -1,0 +1,461 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: golden-status-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  golden-status.json: |
+    {
+      "uid": "golden-status",
+      "title": "Golden Deployments",
+      "description": "Public status view of golden mainnet and testnet Zcash stacks",
+      "tags": ["golden", "public"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "editable": false,
+      "templating": { "list": [] },
+      "panels": [
+        {
+          "id": 1,
+          "title": "Mainnet",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "collapsed": false
+        },
+        {
+          "id": 2,
+          "title": "Zebra Version",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "fixed", "fixedColor": "text" },
+              "noValue": "N/A"
+            }
+          },
+          "options": { "graphMode": "none", "textMode": "name", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zebrad_build_info{namespace=\"golden-mainnet\"}",
+              "legendFormat": "{{version}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Peers",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "fixed", "fixedColor": "semi-dark-blue" },
+              "noValue": "0"
+            }
+          },
+          "options": { "graphMode": "area", "textMode": "value", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zcash_net_peers{namespace=\"golden-mainnet\"}",
+              "legendFormat": "Peers"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Zebra Height",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-purple" } }
+          },
+          "options": { "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zcash_chain_verified_block_height{namespace=\"golden-mainnet\"}",
+              "legendFormat": "Zebra"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Zaino Height",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
+          },
+          "options": { "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zaino_sync_finalized_height{namespace=\"golden-mainnet\"}",
+              "legendFormat": "Zaino"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "Chain Tip",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-orange" } }
+          },
+          "options": { "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zaino_chain_tip_height{namespace=\"golden-mainnet\"}",
+              "legendFormat": "Tip"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "title": "Sync Gap",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 200 },
+                  { "color": "red", "value": 1000 }
+                ]
+              }
+            }
+          },
+          "options": { "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zaino_chain_tip_height{namespace=\"golden-mainnet\"} - zaino_sync_finalized_height{namespace=\"golden-mainnet\"}",
+              "legendFormat": "Blocks behind"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "title": "Mainnet Sync Progress",
+          "type": "timeseries",
+          "gridPos": { "h": 10, "w": 16, "x": 0, "y": 5 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "spanNulls": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Chain Tip" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-orange" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Zaino Finalized" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Zebra Verified" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-purple" } }
+                ]
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "zaino_sync_finalized_height{namespace=\"golden-mainnet\"}",
+              "legendFormat": "Zaino Finalized"
+            },
+            {
+              "expr": "zcash_chain_verified_block_height{namespace=\"golden-mainnet\"}",
+              "legendFormat": "Zebra Verified"
+            },
+            {
+              "expr": "zaino_chain_tip_height{namespace=\"golden-mainnet\"}",
+              "legendFormat": "Chain Tip"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "title": "Mainnet Sync Rate (blocks/min)",
+          "type": "timeseries",
+          "gridPos": { "h": 10, "w": 8, "x": 16, "y": 5 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 1,
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "spanNulls": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Average" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [6, 6] } },
+                  { "id": "custom.lineWidth", "value": 1 },
+                  { "id": "custom.fillOpacity", "value": 0 },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "white" } }
+                ]
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "rate(zaino_sync_finalized_height{namespace=\"golden-mainnet\"}[5m]) * 60",
+              "legendFormat": "5m rate"
+            },
+            {
+              "expr": "avg_over_time(rate(zaino_sync_finalized_height{namespace=\"golden-mainnet\"}[5m])[${__range}:1m]) * 60",
+              "legendFormat": "Average"
+            }
+          ]
+        },
+
+        {
+          "id": 20,
+          "title": "Testnet",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+          "collapsed": false
+        },
+        {
+          "id": 21,
+          "title": "Zebra Version",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "fixed", "fixedColor": "text" },
+              "noValue": "N/A"
+            }
+          },
+          "options": { "graphMode": "none", "textMode": "name", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zebrad_build_info{namespace=\"golden-testnet\"}",
+              "legendFormat": "{{version}}"
+            }
+          ]
+        },
+        {
+          "id": 22,
+          "title": "Peers",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "fixed", "fixedColor": "semi-dark-blue" },
+              "noValue": "0"
+            }
+          },
+          "options": { "graphMode": "area", "textMode": "value", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zcash_net_peers{namespace=\"golden-testnet\"}",
+              "legendFormat": "Peers"
+            }
+          ]
+        },
+        {
+          "id": 23,
+          "title": "Zebra Height",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-purple" } }
+          },
+          "options": { "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zcash_chain_verified_block_height{namespace=\"golden-testnet\"}",
+              "legendFormat": "Zebra"
+            }
+          ]
+        },
+        {
+          "id": 24,
+          "title": "Zaino Height",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
+          },
+          "options": { "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zaino_sync_finalized_height{namespace=\"golden-testnet\"}",
+              "legendFormat": "Zaino"
+            }
+          ]
+        },
+        {
+          "id": 25,
+          "title": "Chain Tip",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 16, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "semi-dark-orange" } }
+          },
+          "options": { "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zaino_chain_tip_height{namespace=\"golden-testnet\"}",
+              "legendFormat": "Tip"
+            }
+          ]
+        },
+        {
+          "id": 26,
+          "title": "Sync Gap",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 20, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 200 },
+                  { "color": "red", "value": 1000 }
+                ]
+              }
+            }
+          },
+          "options": { "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zaino_chain_tip_height{namespace=\"golden-testnet\"} - zaino_sync_finalized_height{namespace=\"golden-testnet\"}",
+              "legendFormat": "Blocks behind"
+            }
+          ]
+        },
+        {
+          "id": 27,
+          "title": "Testnet Sync Progress",
+          "type": "timeseries",
+          "gridPos": { "h": 10, "w": 16, "x": 0, "y": 20 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "spanNulls": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Chain Tip" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-orange" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Zaino Finalized" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Zebra Verified" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-purple" } }
+                ]
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "zaino_sync_finalized_height{namespace=\"golden-testnet\"}",
+              "legendFormat": "Zaino Finalized"
+            },
+            {
+              "expr": "zcash_chain_verified_block_height{namespace=\"golden-testnet\"}",
+              "legendFormat": "Zebra Verified"
+            },
+            {
+              "expr": "zaino_chain_tip_height{namespace=\"golden-testnet\"}",
+              "legendFormat": "Chain Tip"
+            }
+          ]
+        },
+        {
+          "id": 28,
+          "title": "Testnet Sync Rate (blocks/min)",
+          "type": "timeseries",
+          "gridPos": { "h": 10, "w": 8, "x": 16, "y": 20 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 1,
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "spanNulls": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Average" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [6, 6] } },
+                  { "id": "custom.lineWidth", "value": 1 },
+                  { "id": "custom.fillOpacity", "value": 0 },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "white" } }
+                ]
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "rate(zaino_sync_finalized_height{namespace=\"golden-testnet\"}[5m]) * 60",
+              "legendFormat": "5m rate"
+            },
+            {
+              "expr": "avg_over_time(rate(zaino_sync_finalized_height{namespace=\"golden-testnet\"}[5m])[${__range}:1m]) * 60",
+              "legendFormat": "Average"
+            }
+          ]
+        }
+      ],
+      "time": { "from": "now-6h", "to": "now" }
+    }
