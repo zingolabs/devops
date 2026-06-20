@@ -39,7 +39,7 @@ data:
             "expr": "{namespace=~\"$namespace\", app=~\"zaino|zebra\"} |~ \"(?i)assertion.*failed|panic|SIGSEGV|signal.*abort\"",
             "name": "Crash Signal",
             "iconColor": "red",
-            "titleFormat": "Crash: {{app}}",
+            "titleFormat": "Crash: {{namespace}} / {{app}}",
             "tagKeys": "app,namespace"
           }
         ]
@@ -370,18 +370,41 @@ data:
           "id": 8,
           "title": "Critical — assertions, panics, signals, OOM",
           "description": "Stderr and structured log lines matching crash signatures",
-          "type": "logs",
+          "type": "table",
           "gridPos": { "h": 12, "w": 24, "x": 0, "y": 29 },
           "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "namespace" },
+                "properties": [
+                  { "id": "custom.width", "value": 200 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "pod" },
+                "properties": [
+                  { "id": "custom.width", "value": 100 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "app" },
+                "properties": [
+                  { "id": "custom.width", "value": 70 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Time" },
+                "properties": [
+                  { "id": "custom.width", "value": 180 }
+                ]
+              }
+            ]
+          },
           "options": {
-            "showTime": true,
-            "showLabels": true,
-            "showCommonLabels": false,
-            "wrapLogMessage": true,
-            "prettifyLogMessage": false,
-            "enableLogDetails": true,
-            "dedupStrategy": "none",
-            "sortOrder": "Descending"
+            "showHeader": true,
+            "sortBy": [{ "displayName": "Time", "desc": true }]
           },
           "targets": [
             {
@@ -390,24 +413,82 @@ data:
               "queryType": "range",
               "refId": "A"
             }
+          ],
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "source": "labels",
+                "format": "auto"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "id": true,
+                  "tsNs": true,
+                  "labels": true,
+                  "container": true,
+                  "filename": true,
+                  "instance": true,
+                  "job": true,
+                  "node_name": true,
+                  "stream": true
+                },
+                "indexByName": {
+                  "Time": 0,
+                  "namespace": 1,
+                  "pod": 2,
+                  "app": 3,
+                  "Line": 4
+                },
+                "renameByName": {
+                  "Line": "message"
+                }
+              }
+            }
           ]
         },
         {
           "id": 9,
           "title": "Warnings — sync retries, transport errors",
           "description": "Structured WARN-level log lines that often precede crashes",
-          "type": "logs",
+          "type": "table",
           "gridPos": { "h": 10, "w": 24, "x": 0, "y": 41 },
           "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "namespace" },
+                "properties": [
+                  { "id": "custom.width", "value": 200 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "pod" },
+                "properties": [
+                  { "id": "custom.width", "value": 100 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "app" },
+                "properties": [
+                  { "id": "custom.width", "value": 70 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Time" },
+                "properties": [
+                  { "id": "custom.width", "value": 180 }
+                ]
+              }
+            ]
+          },
           "options": {
-            "showTime": true,
-            "showLabels": true,
-            "showCommonLabels": false,
-            "wrapLogMessage": true,
-            "prettifyLogMessage": false,
-            "enableLogDetails": true,
-            "dedupStrategy": "none",
-            "sortOrder": "Descending"
+            "showHeader": true,
+            "sortBy": [{ "displayName": "Time", "desc": true }]
           },
           "targets": [
             {
@@ -415,6 +496,41 @@ data:
               "expr": "{namespace=~\"$namespace\", app=~\"zaino|zebra\"} | json | level = `WARN`",
               "queryType": "range",
               "refId": "A"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "source": "labels",
+                "format": "auto"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "id": true,
+                  "tsNs": true,
+                  "labels": true,
+                  "container": true,
+                  "filename": true,
+                  "instance": true,
+                  "job": true,
+                  "node_name": true,
+                  "stream": true
+                },
+                "indexByName": {
+                  "Time": 0,
+                  "namespace": 1,
+                  "pod": 2,
+                  "app": 3,
+                  "Line": 4
+                },
+                "renameByName": {
+                  "Line": "message"
+                }
+              }
             }
           ]
         }
