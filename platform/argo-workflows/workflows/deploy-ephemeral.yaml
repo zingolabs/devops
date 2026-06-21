@@ -314,7 +314,7 @@ spec:
 
             # Expose zaino service on tailnet
             if [ "{{workflow.parameters.tailscale}}" = "true" ]; then
-              OVERRIDES="$OVERRIDES --set zaino.service.annotations.tailscale\.com/expose=true"
+              OVERRIDES="$OVERRIDES --set-string zaino.service.annotations.tailscale\.com/expose=true"
             fi
 
             # Inject per-deployment env vars (comma-separated KEY=VALUE pairs)
