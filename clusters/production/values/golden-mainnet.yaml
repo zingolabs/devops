@@ -35,6 +35,8 @@ zaino:
     tag: 0.4.1-no-tls-with-prometheus
     hash: ""
     pullPolicy: IfNotPresent
+  config:
+    dbSize: 96
   logging:
     format: json
     color: "false"
