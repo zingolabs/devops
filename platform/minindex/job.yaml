@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: minindex
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minindex-data
+  namespace: minindex
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minindex
+  namespace: minindex
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: minindex
+          image: chonageo/minindex:latest
+          args:
+            - --rpc-url=http://zebra.golden-mainnet.svc:8232
+            - --db=/data/minindex.db
+            - --batch-size=128
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: minindex-data
