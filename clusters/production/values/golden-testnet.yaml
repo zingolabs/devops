@@ -31,7 +31,7 @@ zaino:
   storageClassName: topolvm-thin
   image:
     repository: zingodevops/zaino
-    tag: 0.4.1-no-tls-with-prometheus
+    tag: 0.4.1-no-tls
     hash: ""
     pullPolicy: IfNotPresent
   config:
@@ -40,9 +40,6 @@ zaino:
     format: json
     color: "false"
     level: "zaino=trace"
-  extraEnv:
-    ZAINO_METRICS_ENDPOINT: "0.0.0.0:9998"
-    OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.monitoring.svc:4317"
   volumes:
     data:
       size: 100Gi
