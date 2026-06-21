@@ -36,14 +36,14 @@ zaino:
     hash: ""
     pullPolicy: IfNotPresent
   config:
-    dbSize: 96
+    dbSize: 160
   logging:
     format: json
     color: "false"
     level: "zaino=trace"
   volumes:
     data:
-      size: 100Gi
+      size: 200Gi
   requests:
     cpu: 2
     memory: 4Gi
