@@ -60,6 +60,8 @@ spec:
         value: zaino
       - name: zaino-env
         value: ""
+      - name: tailscale
+        value: "false"
 
   templates:
     - name: deploy
@@ -308,6 +310,11 @@ spec:
             # Disable metrics for older refs that don't support it
             if [ "{{workflow.parameters.metrics}}" = "false" ]; then
               OVERRIDES="$OVERRIDES --set-json zaino.service.metricsPort=null --set-json 'zaino.extraEnv={}'"
+            fi
+
+            # Expose zaino service on tailnet
+            if [ "{{workflow.parameters.tailscale}}" = "true" ]; then
+              OVERRIDES="$OVERRIDES --set zaino.service.annotations.tailscale\.com/expose=true"
             fi
 
             # Inject per-deployment env vars (comma-separated KEY=VALUE pairs)
