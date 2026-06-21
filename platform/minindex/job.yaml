@@ -31,7 +31,8 @@ spec:
           args:
             - --rpc-url=http://zebra.golden-mainnet.svc:8232
             - --db=/data/minindex.db
-            - --batch-size=8
+            - --workers=16
+            - --batch-size=128
           volumeMounts:
             - name: data
               mountPath: /data
