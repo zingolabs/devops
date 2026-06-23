@@ -1,0 +1,7 @@
+config:
+  inCluster: true
+  unsafeUseServiceAccountToken: true
+
+clusterRoleBinding:
+  create: true
+  clusterRoleName: cluster-admin
