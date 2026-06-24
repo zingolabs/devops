@@ -13,7 +13,7 @@ data:
       "tags": ["zaino", "zcash"],
       "timezone": "browser",
       "schemaVersion": 39,
-      "version": 3,
+      "version": 4,
       "refresh": "10s",
       "links": [
         {
@@ -90,6 +90,12 @@ data:
                 "properties": [
                   { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
                 ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "DB Tip" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-blue" } }
+                ]
               }
             ]
           },
@@ -97,6 +103,10 @@ data:
             {
               "expr": "zaino_sync_finalized_height{namespace=\"$namespace\"}",
               "legendFormat": "Finalized Height"
+            },
+            {
+              "expr": "zaino_db_tip_height{namespace=\"$namespace\"}",
+              "legendFormat": "DB Tip"
             },
             {
               "expr": "zaino_chain_tip_height{namespace=\"$namespace\"}",
@@ -111,7 +121,7 @@ data:
         {
           "id": 2,
           "title": "Sync Gap",
-          "description": "Blocks remaining: chain tip minus finalized height",
+          "description": "Blocks behind: zaino's reported sync lag (zaino_sync_lag_blocks)",
           "type": "stat",
           "gridPos": { "h": 5, "w": 8, "x": 16, "y": 0 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -130,7 +140,7 @@ data:
           },
           "targets": [
             {
-              "expr": "zaino_chain_tip_height{namespace=\"$namespace\"} - zaino_sync_finalized_height{namespace=\"$namespace\"}",
+              "expr": "zaino_sync_lag_blocks{namespace=\"$namespace\"}",
               "legendFormat": "Blocks behind"
             }
           ]
@@ -330,17 +340,174 @@ data:
           ]
         },
         {
+          "id": 30,
+          "title": "Zebra RPC (outbound)",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+          "collapsed": false
+        },
+        {
+          "id": 31,
+          "title": "RPC Calls / sec by method",
+          "description": "Outbound RPC calls zaino makes to zebra, per method (zaino_rpc_outbound_requests_total)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "decimals": 2,
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "spanNulls": true,
+                "stacking": { "mode": "normal" }
+              }
+            }
+          },
+          "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] } },
+          "targets": [
+            {
+              "expr": "rate(zaino_rpc_outbound_requests_total{namespace=\"$namespace\"}[5m])",
+              "legendFormat": "{{method}}"
+            }
+          ]
+        },
+        {
+          "id": 32,
+          "title": "RPC Latency p99 by method",
+          "description": "p99 latency of outbound RPC calls to zebra, per method (zaino_rpc_outbound_request_duration_seconds)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 4,
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "spanNulls": true
+              }
+            }
+          },
+          "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] } },
+          "targets": [
+            {
+              "expr": "zaino_rpc_outbound_request_duration_seconds{namespace=\"$namespace\", quantile=\"0.99\"}",
+              "legendFormat": "{{method}}"
+            }
+          ]
+        },
+        {
+          "id": 40,
+          "title": "Mempool & Block I/O",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+          "collapsed": false
+        },
+        {
+          "id": 41,
+          "title": "Mempool",
+          "type": "timeseries",
+          "gridPos": { "h": 7, "w": 8, "x": 0, "y": 33 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 0,
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "spanNulls": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Tip changes/min" },
+                "properties": [
+                  { "id": "custom.axisPlacement", "value": "right" },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-orange" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Mempool txs" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-purple" } }
+                ]
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "zaino_mempool_transactions{namespace=\"$namespace\"}",
+              "legendFormat": "Mempool txs"
+            },
+            {
+              "expr": "rate(zaino_mempool_tip_changes_total{namespace=\"$namespace\"}[5m]) * 60",
+              "legendFormat": "Tip changes/min"
+            }
+          ]
+        },
+        {
+          "id": 42,
+          "title": "Block Build Latency",
+          "type": "timeseries",
+          "gridPos": { "h": 7, "w": 8, "x": 8, "y": 33 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 4,
+              "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "spanNulls": true }
+            },
+            "overrides": [
+              { "matcher": { "id": "byName", "options": "p50" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-green" } } ] },
+              { "matcher": { "id": "byName", "options": "p99" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-red" } } ] }
+            ]
+          },
+          "targets": [
+            { "expr": "zaino_sync_block_build_seconds{namespace=\"$namespace\", quantile=\"0.5\"}", "legendFormat": "p50" },
+            { "expr": "zaino_sync_block_build_seconds{namespace=\"$namespace\", quantile=\"0.99\"}", "legendFormat": "p99" }
+          ]
+        },
+        {
+          "id": 43,
+          "title": "Block Write Latency",
+          "type": "timeseries",
+          "gridPos": { "h": 7, "w": 8, "x": 16, "y": 33 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 4,
+              "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "spanNulls": true }
+            },
+            "overrides": [
+              { "matcher": { "id": "byName", "options": "p50" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-green" } } ] },
+              { "matcher": { "id": "byName", "options": "p99" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-red" } } ] }
+            ]
+          },
+          "targets": [
+            { "expr": "zaino_sync_block_write_seconds{namespace=\"$namespace\", quantile=\"0.5\"}", "legendFormat": "p50" },
+            { "expr": "zaino_sync_block_write_seconds{namespace=\"$namespace\", quantile=\"0.99\"}", "legendFormat": "p99" }
+          ]
+        },
+        {
           "id": 20,
           "title": "Logs",
           "type": "row",
-          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 },
           "collapsed": false
         },
         {
           "id": 21,
           "title": "Zaino logs",
           "type": "logs",
-          "gridPos": { "h": 14, "w": 12, "x": 0, "y": 24 },
+          "gridPos": { "h": 14, "w": 12, "x": 0, "y": 41 },
           "datasource": { "type": "loki", "uid": "loki" },
           "links": [
             {
@@ -371,7 +538,7 @@ data:
           "id": 22,
           "title": "Zebra logs",
           "type": "logs",
-          "gridPos": { "h": 14, "w": 12, "x": 12, "y": 24 },
+          "gridPos": { "h": 14, "w": 12, "x": 12, "y": 41 },
           "datasource": { "type": "loki", "uid": "loki" },
           "links": [
             {
