@@ -13,7 +13,7 @@ data:
       "tags": ["zaino", "zebra", "zcash"],
       "timezone": "browser",
       "schemaVersion": 39,
-      "version": 1,
+      "version": 2,
       "refresh": "10s",
       "templating": {
         "list": [
@@ -54,7 +54,7 @@ data:
           "id": 1,
           "title": "Zebra Version",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+          "gridPos": { "h": 2, "w": 4, "x": 0, "y": 0 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": {
             "defaults": {
@@ -67,6 +67,27 @@ data:
           "targets": [
             {
               "expr": "zebrad_build_info{namespace=\"$namespace\"}",
+              "legendFormat": "{{version}}"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "title": "Zaino Version",
+          "type": "stat",
+          "gridPos": { "h": 2, "w": 4, "x": 0, "y": 2 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "fixed", "fixedColor": "text" },
+              "mappings": [],
+              "noValue": "N/A"
+            }
+          },
+          "options": { "graphMode": "none", "textMode": "name", "reduceOptions": { "calcs": ["last"] } },
+          "targets": [
+            {
+              "expr": "zainod_build_info{namespace=\"$namespace\"}",
               "legendFormat": "{{version}}"
             }
           ]
