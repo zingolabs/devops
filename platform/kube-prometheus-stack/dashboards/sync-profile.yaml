@@ -13,7 +13,7 @@ data:
       "tags": ["zaino", "zcash"],
       "timezone": "browser",
       "schemaVersion": 39,
-      "version": 1,
+      "version": 2,
       "refresh": "30s",
       "templating": {
         "list": [
@@ -56,7 +56,15 @@ data:
                 "pointSize": { "fixed": 2 }
               },
               "color": { "mode": "fixed", "fixedColor": "semi-dark-green" }
-            }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Height" },
+                "properties": [
+                  { "id": "unit", "value": "locale" }
+                ]
+              }
+            ]
           },
           "options": {
             "seriesMapping": "auto"
@@ -100,7 +108,15 @@ data:
                 "pointSize": { "fixed": 2 }
               },
               "color": { "mode": "fixed", "fixedColor": "semi-dark-yellow" }
-            }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Height" },
+                "properties": [
+                  { "id": "unit", "value": "locale" }
+                ]
+              }
+            ]
           },
           "options": {
             "seriesMapping": "auto"
@@ -145,6 +161,12 @@ data:
               }
             },
             "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Height" },
+                "properties": [
+                  { "id": "unit", "value": "locale" }
+                ]
+              },
               {
                 "matcher": { "id": "byName", "options": "Sapling/s" },
                 "properties": [
@@ -210,6 +232,12 @@ data:
             },
             "overrides": [
               {
+                "matcher": { "id": "byName", "options": "Height" },
+                "properties": [
+                  { "id": "unit", "value": "locale" }
+                ]
+              },
+              {
                 "matcher": { "id": "byName", "options": "p50" },
                 "properties": [
                   { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-green" } }
@@ -271,7 +299,15 @@ data:
                 "pointSize": { "fixed": 2 }
               },
               "scaleDistribution": { "type": "log", "log": 10 }
-            }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Height" },
+                "properties": [
+                  { "id": "unit", "value": "locale" }
+                ]
+              }
+            ]
           },
           "options": {
             "seriesMapping": "auto"
@@ -321,7 +357,8 @@ data:
               {
                 "matcher": { "id": "byName", "options": "quantile" },
                 "properties": [
-                  { "id": "custom.width", "value": 80 }
+                  { "id": "custom.width", "value": 80 },
+                  { "id": "unit", "value": "none" }
                 ]
               }
             ]
@@ -380,22 +417,17 @@ data:
             },
             "overrides": [
               {
-                "matcher": { "id": "byName", "options": "method" },
+                "matcher": { "id": "byName", "options": "method\\quantile" },
                 "properties": [
-                  { "id": "custom.width", "value": 140 }
-                ]
-              },
-              {
-                "matcher": { "id": "byName", "options": "quantile" },
-                "properties": [
-                  { "id": "custom.width", "value": 80 }
+                  { "id": "custom.width", "value": 160 },
+                  { "id": "unit", "value": "none" }
                 ]
               }
             ]
           },
           "options": {
             "showHeader": true,
-            "sortBy": [{ "displayName": "method", "desc": false }]
+            "sortBy": [{ "displayName": "method\\quantile", "desc": false }]
           },
           "targets": [
             {
@@ -421,15 +453,15 @@ data:
                   "namespace": true,
                   "pod": true,
                   "service": true
-                },
-                "indexByName": {
-                  "method": 0,
-                  "quantile": 1,
-                  "Value": 2
-                },
-                "renameByName": {
-                  "Value": "latency"
                 }
+              }
+            },
+            {
+              "id": "groupingToMatrix",
+              "options": {
+                "columnField": "quantile",
+                "rowField": "method",
+                "valueField": "Value"
               }
             }
           ]
