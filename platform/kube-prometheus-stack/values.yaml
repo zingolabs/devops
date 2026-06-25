@@ -43,6 +43,12 @@ grafana:
           filterByTraceID: true
         nodeGraph:
           enabled: true
+    # Static-data source used to inject hand-authored marker points (e.g. block
+    # heights for network upgrades / sandblast) into xychart panels via Mixed.
+    - name: TestData
+      type: grafana-testdata-datasource
+      uid: testdata
+      isDefault: false
   grafana.ini:
     server:
       domain: grafana.vaquita-altair.ts.net

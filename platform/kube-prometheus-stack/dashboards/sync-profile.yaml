@@ -13,7 +13,7 @@ data:
       "tags": ["zaino", "zcash"],
       "timezone": "browser",
       "schemaVersion": 39,
-      "version": 2,
+      "version": 3,
       "refresh": "30s",
       "templating": {
         "list": [
@@ -48,7 +48,7 @@ data:
           "description": "Blocks synced per minute as a function of chain height (15m smoothing)",
           "type": "xychart",
           "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": { "type": "datasource", "uid": "-- Mixed --" },
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -63,6 +63,22 @@ data:
                 "properties": [
                   { "id": "unit", "value": "locale" }
                 ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "upgrade" },
+                "properties": [
+                  { "id": "custom.show", "value": "points" },
+                  { "id": "custom.pointSize", "value": { "fixed": 7 } },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "sandblast" },
+                "properties": [
+                  { "id": "custom.show", "value": "points" },
+                  { "id": "custom.pointSize", "value": { "fixed": 7 } },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+                ]
               }
             ]
           },
@@ -71,20 +87,35 @@ data:
           },
           "targets": [
             {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "zaino_sync_finalized_height{namespace=\"$namespace\"}",
               "legendFormat": "Height",
               "refId": "A"
             },
             {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "rate(zaino_sync_finalized_height{namespace=\"$namespace\"}[15m]) * 60",
               "legendFormat": "blocks/min",
               "refId": "B"
+            },
+            {
+              "datasource": { "type": "grafana-testdata-datasource", "uid": "testdata" },
+              "scenarioId": "csv_content",
+              "csvContent": "height,upgrade\n347500,0\n419200,0\n653600,0\n903000,0\n1046400,0\n1687104,0\n2726400,0",
+              "refId": "C"
+            },
+            {
+              "datasource": { "type": "grafana-testdata-datasource", "uid": "testdata" },
+              "scenarioId": "csv_content",
+              "csvContent": "height,sandblast\n1700000,0\n2000000,0",
+              "refId": "D"
             }
           ],
           "transformations": [
             {
               "id": "seriesToColumns",
-              "options": { "byField": "Time" }
+              "options": { "byField": "Time" },
+              "filter": { "id": "byRefId", "options": "A|B" }
             },
             {
               "id": "organize",
