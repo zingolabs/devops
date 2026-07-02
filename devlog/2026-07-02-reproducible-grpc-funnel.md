@@ -70,5 +70,34 @@ once this lands on `main`. Nothing is applied imperatively.
 - Authkey is passed via `--set-string authkey.value` → it lands in the helm
   release Secret (namespace-scoped). Acceptable for ephemeral namespaces; a
   future tightening could create the Secret out-of-band and use `existingSecret`.
-- Not yet exercised end-to-end through the workflow (built + `helm template`
-  validated; the live rc6 hand-built funnel is the empirical proof of the design).
+- ~~Not yet exercised end-to-end through the workflow~~ — done, see Validation.
+
+## Validation — rc7, end to end through the workflow
+
+Committed to `main` (`9e94d14`), ArgoCD synced the WorkflowTemplate, then:
+
+```
+argo submit --from workflowtemplate/deploy-ephemeral \
+  -p namespace=rc7-ephemeral-29e8d4c \
+  -p ref=29e8d4ca262e78955ec807bdbc69e62b40a5912f \
+  -p use-zaino-cache=false \
+  -p zaino-env=ZAINO_EPHEMERAL_FINALISED_STATE=true \
+  -p tailscale=true -p expose-public=true
+```
+
+Workflow `deploy-ephemeral-j8nm2` **Succeeded**. The `expose-public` step minted a
+`tag:k8s` authkey via the operator OAuth client and installed the funnel — zero
+manual steps. Result in `rc7-ephemeral-29e8d4c`:
+
+- funnel pod `3/3 Running`, **PVC `…-state` Bound** (durable identity), cert issued
+  (`CERT_READY`), Tailscale node registered as `rc7-ephemeral-29e8d4c` — **clean
+  hostname, no `-N` collision** (unique-hostname + persistent-state design held).
+- Public DNS (`1.1.1.1`): `rc7-ephemeral-29e8d4c.vaquita-altair.ts.net` →
+  `208.111.34.11` / `208.111.35.209` (Tailscale public funnel ingress).
+- `grpcurl` from a **clean podman container** to the public ingress IP, SNI set,
+  **cert validation ON** (no `-insecure`): `GetLightdInfo` → `chainName main`,
+  `blockHeight 3380694`, `estimatedHeight 3398508`, `Nu6_2`, `/Zebra:5.2.0/`;
+  `GetBlockRange 3380690–3380692` streamed 3 compact blocks.
+
+⇒ Standard, wallet-pluggable gRPC-over-TLS, reproducible from one workflow param.
+(`version` still reports the cosmetic hardcoded `0.4.2` — unchanged from rc6.)
