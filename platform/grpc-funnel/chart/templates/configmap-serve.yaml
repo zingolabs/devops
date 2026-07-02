@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "grpc-funnel.fullname" . }}-serve
+  labels:
+    {{- include "grpc-funnel.labels" . | nindent 4 }}
+data:
+  # TCP 443 -> passthrough to nginx (127.0.0.1:8443). TerminateTLS is OMITTED on
+  # purpose: it's a string field, `false` fails to unmarshal, and terminating in
+  # Tailscale breaks gRPC ALPN. ${TS_CERT_DOMAIN} is substituted by containerboot.
+  serve.json: |
+    {
+      "TCP": { "443": { "TCPForward": "127.0.0.1:8443" } }{{ if .Values.allowFunnel }},
+      "AllowFunnel": { "${TS_CERT_DOMAIN}:443": true }{{ end }}
+    }

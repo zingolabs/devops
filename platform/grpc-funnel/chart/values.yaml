@@ -1,0 +1,47 @@
+# grpc-funnel — expose a plaintext (h2c) gRPC backend publicly as standard
+# gRPC-over-TLS, via Tailscale Funnel (TCP passthrough) + nginx TLS terminator.
+#
+# Why this shape (see README.md and memory reference_public_grpc_funnel):
+#   - The Tailscale *operator* Funnel is L7/Ingress-only and cannot carry gRPC.
+#   - Funnel `--tls-terminated-tcp` returns "No ALPN negotiated" -> gRPC clients reject.
+#   - So we run Funnel as raw TCP *passthrough* and terminate TLS at nginx (correct
+#     h2 ALPN) with a Tailscale-issued (Let's Encrypt) cert, then grpc_pass h2c to the
+#     backend. The backend (e.g. zaino) stays no-tls and untouched.
+
+# Public hostname LABEL (DNS-1123). Public URL becomes <hostname>.<tailnet>:443.
+# Keep it unique per deployment to avoid Tailscale node-name collisions.
+hostname: ""
+
+# Tailnet DNS suffix, e.g. vaquita-altair.ts.net
+tailnet: ""
+
+# Plaintext h2c gRPC backend as host:port,
+# e.g. zaino.my-ns.svc.cluster.local:8137
+backend: ""
+
+authkey:
+  # Provide the raw Tailscale authkey here and the chart creates the Secret ...
+  value: ""
+  # ... or point at an existing Secret that has the key under `TS_AUTHKEY`.
+  existingSecret: ""
+
+# Persistent tailscale state dir. The whole point of persistence: the node keeps
+# its identity + cert across pod restarts. With `mem:` state a restart
+# re-registers under a new name (<hostname>-N) and the cert no longer matches the
+# funnel hostname. RWO local-path is fine (single replica, Recreate strategy).
+persistence:
+  enabled: true
+  storageClass: local-path
+  size: 64Mi
+
+# Public Funnel is UNAUTHENTICATED. Off by default; opt in explicitly.
+allowFunnel: true
+
+images:
+  tailscale: tailscale/tailscale:stable
+  nginx: nginx:alpine
+
+resources: {}
+
+nameOverride: ""
+fullnameOverride: ""

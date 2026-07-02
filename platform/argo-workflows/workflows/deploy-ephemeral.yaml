@@ -62,6 +62,22 @@ spec:
         value: ""
       - name: tailscale
         value: "false"
+      # Public (non-tailnet) standard gRPC-over-TLS via Tailscale Funnel + nginx.
+      # See platform/grpc-funnel. Endpoint is UNAUTHENTICATED — use for time-boxed tests.
+      - name: expose-public
+        value: "false"
+      # DNS-1123 label; public URL becomes <public-hostname>.<tailnet>:443.
+      # Empty -> defaults to the namespace (keeps it unique + reap-able on cleanup).
+      - name: public-hostname
+        value: ""
+      - name: tailnet
+        value: "vaquita-altair.ts.net"
+      - name: authkey-expiry-seconds
+        value: "604800"
+      # Branch/tag of this repo to pull the grpc-funnel chart from. Defaults to
+      # main (the GitOps source of truth); override to test from a feature branch.
+      - name: chart-ref
+        value: "main"
 
   templates:
     - name: deploy
@@ -120,6 +136,9 @@ spec:
                   value: "{{steps.build-image.outputs.parameters.image}}"
         - - name: fix-permissions
             template: fix-permissions
+        - - name: expose-public
+            template: expose-public
+            when: "'{{workflow.parameters.expose-public}}' == 'true'"
         - - name: report
             template: report-endpoint
 
@@ -353,6 +372,67 @@ spec:
             kubectl patch sts zaino -n {{workflow.parameters.namespace}} --type json \
               -p '[{"op":"replace","path":"/spec/template/spec/initContainers/0/args/0","value":"mkdir -p /home/zaino/.cache/zaino\nchown -R 1000:1000 /home/zaino\n"}]' || true
 
+    # Public exposure: mint a tagged Tailscale authkey (via the operator OAuth
+    # client) and install the grpc-funnel chart (Funnel TCP passthrough + nginx
+    # TLS terminator). Result: standard gRPC-over-TLS at <hostname>.<tailnet>:443.
+    - name: expose-public
+      container:
+        image: alpine/helm:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            apk add --no-cache curl jq git >/dev/null
+
+            NS="{{workflow.parameters.namespace}}"
+            TAILNET="{{workflow.parameters.tailnet}}"
+            HOST="{{workflow.parameters.public-hostname}}"
+            [ -z "$HOST" ] && HOST="$NS"
+            BACKEND="{{workflow.parameters.release-name}}.$NS.svc.cluster.local:8137"
+            EXPIRY="{{workflow.parameters.authkey-expiry-seconds}}"
+
+            # Read the operator OAuth client creds from the tailscale namespace
+            # via the k8s API (the workflow SA has cluster-wide secret read).
+            SA=/var/run/secrets/kubernetes.io/serviceaccount
+            OAUTH=$(curl -sf --cacert $SA/ca.crt \
+              -H "Authorization: Bearer $(cat $SA/token)" \
+              https://kubernetes.default.svc/api/v1/namespaces/tailscale/secrets/operator-oauth)
+            CLIENT_ID=$(echo "$OAUTH" | jq -r '.data.client_id' | base64 -d)
+            CLIENT_SECRET=$(echo "$OAUTH" | jq -r '.data.client_secret' | base64 -d)
+
+            # Exchange for an access token.
+            ACCESS_TOKEN=$(curl -sf https://api.tailscale.com/api/v2/oauth/token \
+              -d "client_id=$CLIENT_ID" -d "client_secret=$CLIENT_SECRET" \
+              | jq -r '.access_token')
+            if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
+              echo "ERROR: failed to obtain Tailscale OAuth access token"; exit 1
+            fi
+
+            # Mint a tagged, reusable, non-ephemeral authkey. Non-ephemeral so the
+            # node survives a brief restart; tag:k8s already carries the funnel attr.
+            KEY=$(curl -sf https://api.tailscale.com/api/v2/tailnet/-/keys \
+              -H "Authorization: Bearer $ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":true,\"ephemeral\":false,\"preauthorized\":true,\"tags\":[\"tag:k8s\"]}}},\"expirySeconds\":$EXPIRY,\"description\":\"grpc-funnel-$NS\"}" \
+              | jq -r '.key')
+            if [ -z "$KEY" ] || [ "$KEY" = "null" ]; then
+              echo "ERROR: failed to mint Tailscale authkey"; exit 1
+            fi
+
+            # Install the funnel from this repo's chart (public, no auth needed to clone).
+            git clone --depth 1 --branch "{{workflow.parameters.chart-ref}}" \
+              https://github.com/zingolabs/devops.git /tmp/devops
+            helm upgrade --install {{workflow.parameters.release-name}}-funnel \
+              /tmp/devops/platform/grpc-funnel/chart \
+              --namespace "$NS" \
+              --set hostname="$HOST" \
+              --set tailnet="$TAILNET" \
+              --set backend="$BACKEND" \
+              --set-string authkey.value="$KEY" \
+              --wait=false
+
+            echo "Funnel installed. Public gRPC (once cert issues): $HOST.$TAILNET:443"
+
     - name: report-endpoint
       container:
         image: bitnami/kubectl:latest
@@ -366,6 +446,11 @@ spec:
             echo "Namespace:  {{workflow.parameters.namespace}}"
             echo "Zaino gRPC: zaino.{{workflow.parameters.namespace}}.svc:8137"
             echo "Zebra RPC:  zebra.{{workflow.parameters.namespace}}.svc:8232"
+            if [ "{{workflow.parameters.expose-public}}" = "true" ]; then
+              HOST="{{workflow.parameters.public-hostname}}"
+              [ -z "$HOST" ] && HOST="{{workflow.parameters.namespace}}"
+              echo "Public gRPC: $HOST.{{workflow.parameters.tailnet}}:443 (standard gRPC-over-TLS, UNAUTHENTICATED; cert issues ~1min after deploy)"
+            fi
             echo ""
             echo "To monitor sync:"
             echo "  ~/.local/share/zaino/benchmarks/sync-speed-monitor.sh {{workflow.parameters.namespace}} 60"

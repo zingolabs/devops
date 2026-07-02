@@ -1,6 +1,7 @@
 # Cleanup Ephemeral Deployment
-# Deletes namespace and all resources within, including cluster-scoped
-# VolumeSnapshotContents that reference the namespace.
+# Reaps the public-funnel Tailscale device (if any), then deletes the namespace
+# and all resources within, including cluster-scoped VolumeSnapshotContents that
+# reference the namespace.
 #
 # Usage:
 #   argo submit --from workflowtemplate/cleanup-ephemeral \
@@ -18,9 +19,69 @@ spec:
     parameters:
       - name: namespace
         value: ephemeral-test
+      # Funnel hostname to reap (empty -> defaults to namespace, matching
+      # deploy-ephemeral's default). Reap is best-effort; safe to leave as-is.
+      - name: public-hostname
+        value: ""
+      - name: tailnet
+        value: "vaquita-altair.ts.net"
 
   templates:
     - name: cleanup
+      steps:
+        - - name: reap-device
+            template: reap-device
+        - - name: delete-namespace
+            template: delete-namespace
+
+    # Best-effort: delete the persistent Tailscale funnel node so its name is
+    # free to reuse. Non-ephemeral nodes don't auto-expire, so without this a
+    # stale device lingers until the authkey expiry and forces a -N suffix (cert
+    # mismatch) on the next deploy with the same hostname. Never fails cleanup.
+    - name: reap-device
+      container:
+        image: alpine/helm:latest
+        command: [sh, -c]
+        args:
+          - |
+            set +e
+            apk add --no-cache curl jq >/dev/null 2>&1
+
+            NS="{{workflow.parameters.namespace}}"
+            HOST="{{workflow.parameters.public-hostname}}"
+            [ -z "$HOST" ] && HOST="$NS"
+
+            SA=/var/run/secrets/kubernetes.io/serviceaccount
+            OAUTH=$(curl -sf --cacert $SA/ca.crt \
+              -H "Authorization: Bearer $(cat $SA/token)" \
+              https://kubernetes.default.svc/api/v1/namespaces/tailscale/secrets/operator-oauth)
+            CLIENT_ID=$(echo "$OAUTH" | jq -r '.data.client_id' | base64 -d)
+            CLIENT_SECRET=$(echo "$OAUTH" | jq -r '.data.client_secret' | base64 -d)
+            ACCESS_TOKEN=$(curl -sf https://api.tailscale.com/api/v2/oauth/token \
+              -d "client_id=$CLIENT_ID" -d "client_secret=$CLIENT_SECRET" \
+              | jq -r '.access_token')
+            if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
+              echo "reap: no OAuth token available, skipping"; exit 0
+            fi
+
+            # Delete devices whose hostname is exactly the funnel hostname (or a
+            # -N collision suffix) AND carry tag:k8s — never touch anything else.
+            DEVICES=$(curl -sf -H "Authorization: Bearer $ACCESS_TOKEN" \
+              https://api.tailscale.com/api/v2/tailnet/-/devices)
+            IDS=$(echo "$DEVICES" | jq -r --arg h "$HOST" \
+              '.devices[] | select((.hostname==$h or (.hostname|startswith($h+"-"))) and ((.tags // []) | index("tag:k8s"))) | .id')
+            if [ -z "$IDS" ]; then
+              echo "reap: no matching tailscale device for '$HOST'"; exit 0
+            fi
+            for id in $IDS; do
+              echo "reap: deleting tailscale device $id ($HOST)"
+              curl -sf -X DELETE -H "Authorization: Bearer $ACCESS_TOKEN" \
+                https://api.tailscale.com/api/v2/device/$id || echo "reap: delete $id failed"
+            done
+            echo "reap: done"
+            exit 0
+
+    - name: delete-namespace
       container:
         image: bitnami/kubectl:latest
         command: [sh, -c]

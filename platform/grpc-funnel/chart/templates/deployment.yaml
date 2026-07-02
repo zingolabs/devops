@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "grpc-funnel.fullname" . }}
+  labels:
+    {{- include "grpc-funnel.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # RWO state PVC can't be mounted by two pods at once -> never roll, recreate.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "grpc-funnel.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "grpc-funnel.labels" . | nindent 8 }}
+      annotations:
+        checksum/serve: {{ include (print $.Template.BasePath "/configmap-serve.yaml") . | sha256sum }}
+        checksum/nginx: {{ include (print $.Template.BasePath "/configmap-nginx.yaml") . | sha256sum }}
+    spec:
+      containers:
+        # 1) Tailscale node running Funnel as raw TCP passthrough (443 -> :8443).
+        - name: tailscale
+          image: {{ .Values.images.tailscale }}
+          env:
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "grpc-funnel.authkeySecret" . }}
+                  key: TS_AUTHKEY
+            - name: TS_HOSTNAME
+              value: {{ required "grpc-funnel: .Values.hostname is required" .Values.hostname | quote }}
+            - name: TS_USERSPACE
+              value: "true"
+            # Empty -> containerboot won't try to persist state in a kube Secret
+            # (which would need extra RBAC). State lives in TS_STATE_DIR instead.
+            - name: TS_KUBE_SECRET
+              value: ""
+            - name: TS_STATE_DIR
+              value: {{ ternary "/var/lib/tailscale" "mem:" .Values.persistence.enabled | quote }}
+            - name: TS_SOCKET
+              value: /var/run/tailscale/tailscaled.sock
+            - name: TS_SERVE_CONFIG
+              value: /config/serve.json
+          volumeMounts:
+            - name: serve
+              mountPath: /config
+            - name: tsrun
+              mountPath: /var/run/tailscale
+            {{- if .Values.persistence.enabled }}
+            - name: state
+              mountPath: /var/lib/tailscale
+            {{- end }}
+        # 2) Fetch a public (Let's Encrypt) cert for the funnel domain via the
+        #    shared tailscaled socket, drop it where nginx reads it.
+        - name: certfetch
+          image: {{ .Values.images.tailscale }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              SOCK=/var/run/tailscale/tailscaled.sock
+              until [ -S "$SOCK" ]; do sleep 1; done
+              until tailscale --socket=$SOCK status >/dev/null 2>&1; do sleep 2; done
+              until tailscale --socket=$SOCK cert --cert-file /certs/tls.crt --key-file /certs/tls.key {{ include "grpc-funnel.certDomain" . }}; do
+                echo "cert retry"; sleep 5
+              done
+              echo "CERT_READY"; sleep infinity
+          volumeMounts:
+            - name: tsrun
+              mountPath: /var/run/tailscale
+            - name: certs
+              mountPath: /certs
+        # 3) nginx: terminate client TLS (correct h2 ALPN), grpc_pass h2c to backend.
+        - name: nginx
+          image: {{ .Values.images.nginx }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              until [ -s /certs/tls.crt ] && [ -s /certs/tls.key ]; do sleep 2; done
+              exec nginx -g 'daemon off;'
+          ports:
+            - name: grpcs
+              containerPort: 8443
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: certs
+              mountPath: /certs
+      volumes:
+        - name: serve
+          configMap:
+            name: {{ include "grpc-funnel.fullname" . }}-serve
+        - name: nginx-conf
+          configMap:
+            name: {{ include "grpc-funnel.fullname" . }}-nginx
+        - name: certs
+          emptyDir: {}
+        - name: tsrun
+          emptyDir: {}
+        {{- if .Values.persistence.enabled }}
+        - name: state
+          persistentVolumeClaim:
+            claimName: {{ include "grpc-funnel.fullname" . }}-state
+        {{- end }}

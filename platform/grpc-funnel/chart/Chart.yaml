@@ -1,0 +1,8 @@
+apiVersion: v2
+name: grpc-funnel
+description: >-
+  Public gRPC-over-TLS egress for a plaintext (h2c) backend via Tailscale Funnel
+  (TCP passthrough) + an nginx TLS terminator. Wallet-pluggable standard gRPC.
+type: application
+version: 0.1.0
+appVersion: "1"
