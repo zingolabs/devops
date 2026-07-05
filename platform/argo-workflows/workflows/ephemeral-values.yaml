@@ -124,11 +124,11 @@ data:
       testnet: true
       replicas: 1
       image:
-        tag: "4.4.0"
+        tag: "5.2.0"
       storageClassName: topolvm-thin
       volumes:
         data:
-          size: 20Gi
+          size: 50Gi
           dataSource:
             kind: VolumeSnapshot
             apiGroup: snapshot.storage.k8s.io
@@ -144,10 +144,18 @@ data:
       name: zaino
       replicas: 1
       rpcService: zebra
+      service:
+        port: 8137
+        metricsPort: 9998
       image:
         repository: zingodevops/zaino
-        tag: 0.2.0-rc.4-no-tls
+        tag: 0.3.1-no-tls
         hash: ""
+      extraEnv:
+        ZAINO_METRICS_ENDPOINT: "0.0.0.0:9998"
+      logging:
+        format: json
+        color: "false"
       storageClassName: topolvm-thin
       volumes:
         data:
