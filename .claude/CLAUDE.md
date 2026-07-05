@@ -59,6 +59,18 @@ Implement in main thread
 - **Goal**: Snapshot infrastructure for golden deploys → ephemeral test instances
 - **Pattern**: GitOps with app-of-apps (evolving)
 
+## Slash Commands
+
+- `/deploy <ref>` — deploy a zaino instance (resolves ref, derives namespace, constructs argo submit)
+- `/cleanup <ns>` — tear down an ephemeral deployment
+
+## Maintenance: deploy-ephemeral docs
+
+When modifying `platform/argo-workflows/workflows/deploy-ephemeral.yaml`:
+- Update the memory reference at `~/.claude/projects/-home-chona-zingo-zingolabs-devops/memory/reference_ephemeral_deploy.md`
+- Update `.claude/commands/deploy.md` if params or behavior changed
+- Remind user to update the devlog
+
 ## Git Commits
 
 - NEVER add co-author or "Generated with Claude Code" footers
