@@ -64,10 +64,12 @@ Implement in main thread
 - `/deploy <ref>` — deploy a zaino instance (resolves ref, derives namespace, constructs argo submit)
 - `/cleanup <ns>` — tear down an ephemeral deployment
 
+Full deploy-ephemeral reference (params, naming, caveats): `.claude/deploy-ephemeral-reference.md`
+
 ## Maintenance: deploy-ephemeral docs
 
 When modifying `platform/argo-workflows/workflows/deploy-ephemeral.yaml`:
-- Update the memory reference at `~/.claude/projects/-home-chona-zingo-zingolabs-devops/memory/reference_ephemeral_deploy.md`
+- Update `.claude/deploy-ephemeral-reference.md` (the canonical reference)
 - Update `.claude/commands/deploy.md` if params or behavior changed
 - Remind user to update the devlog
 
