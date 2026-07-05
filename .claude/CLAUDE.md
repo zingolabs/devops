@@ -64,6 +64,7 @@ Implement in main thread
 - `/deploy <ref>` — deploy a zaino instance (resolves ref, derives namespace, constructs argo submit)
 - `/cleanup <ns>` — tear down an ephemeral deployment
 - `/evict` — scout stale ephemeral deployments and reclaim LVM thin pool storage
+- `/update-golden` — upgrade golden deployments to latest compatible zaino/zebra releases
 
 Full deploy-ephemeral reference (params, naming, caveats): `.claude/deploy-ephemeral-reference.md`
 
