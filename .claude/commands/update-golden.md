@@ -47,6 +47,13 @@ Before upgrading, check these known compatibility constraints:
   Upgrading zebra across an NU activation on existing state can fork (happened with NU6.2 + 4.4.1).
 - Zaino UID change at 0.4.x: container UID changed from 2003 to 1000. The zcash-stack chart's
   init-perms must match (patched via fix-permissions step in ephemeral; golden chart should have it).
+- **Zaino configuration schema changes:** zaino.toml fields, env var names, and defaults can change
+  between versions. Before upgrading, check the zaino repo for config changes between the current
+  and target version (look at `zaino-daemon/src/config.rs` or similar, and CHANGELOG/release notes).
+  The golden values files (`clusters/production/values/golden-*.yaml`) hard-code config like
+  `dbSize`, `logging.level`, `logging.format`, and env vars passed through `extraEnv`. A renamed or
+  removed config field will either silently be ignored or crash on startup. Cross-reference
+  the release notes and the zcash-stack chart's `values.yaml` for any new/changed config keys.
 
 **Soft constraints:**
 - Multi-arch image mismatch: some zebra tags (5.0.0, 5.1.0) resolved to wrong binaries on
@@ -65,7 +72,8 @@ argo submit --from workflowtemplate/deploy-ephemeral -n argo \
 ```
 
 Watch for:
-- Clean startup (no crashloop)
+- Clean startup (no crashloop — config field mismatches often surface here)
+- No unknown/deprecated config warnings in logs (renamed TOML fields, removed env vars)
 - Schema migration completion (check logs for "migration complete" or schema version)
 - Sync progress (should start advancing blocks)
 - gRPC responsiveness (`GetLightdInfo` returns correct chain info)
