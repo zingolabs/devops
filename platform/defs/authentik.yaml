@@ -1,0 +1,3 @@
+name: authentik
+namespace: authentik
+sourcePath: platform/authentik
