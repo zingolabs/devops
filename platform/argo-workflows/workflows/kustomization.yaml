@@ -11,4 +11,5 @@ resources:
   - serve-zaino.yaml
   - update-zaino.yaml
   - cleanup-ephemeral.yaml
+  - bench-zaino.yaml
   - ephemeral-values.yaml

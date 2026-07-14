@@ -1,0 +1,280 @@
+# Bench Zaino Sync Engine
+# Builds sync-bench from a git ref, pushes to registry, then runs a k8s Job
+# against the golden-mainnet Zebra ReadState with LMDB + OTLP tracing.
+#
+# Usage:
+#   argo submit --from workflowtemplate/bench-zaino -n argo \
+#     -p ref=dev
+#
+#   argo submit --from workflowtemplate/bench-zaino -n argo \
+#     -p ref=feat/parallel-merge -p block-count=100000 -p tag=par-merge
+#
+#   argo submit --from workflowtemplate/bench-zaino -n argo \
+#     -p ref=dev -p block-count=3410000 -p tag=full-chain
+#
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: bench-zaino
+  namespace: argo
+spec:
+  entrypoint: bench
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: ref
+        value: dev
+      - name: block-count
+        value: "100000"
+      - name: concurrency
+        value: "16"
+      - name: batch-size
+        value: "1000"
+      - name: rust-log
+        value: "sync_bench=info,zaino_sync=trace"
+      - name: tag
+        value: ""
+      - name: target-namespace
+        value: golden-mainnet
+      - name: node
+        value: tekau
+
+  templates:
+    - name: bench
+      inputs:
+        parameters:
+          - name: ref
+            default: dev
+          - name: block-count
+            default: "100000"
+          - name: concurrency
+            default: "16"
+          - name: batch-size
+            default: "1000"
+          - name: rust-log
+            default: "sync_bench=info,zaino_sync=trace"
+          - name: tag
+            default: ""
+          - name: target-namespace
+            default: golden-mainnet
+          - name: node
+            default: tekau
+      steps:
+        - - name: resolve-tag
+            template: resolve-tag
+            arguments:
+              parameters:
+                - name: ref
+                  value: "{{inputs.parameters.ref}}"
+                - name: tag
+                  value: "{{inputs.parameters.tag}}"
+        - - name: build-image
+            template: buildkit
+            arguments:
+              parameters:
+                - name: ref
+                  value: "{{inputs.parameters.ref}}"
+                - name: destination
+                  value: "zingodevops/sync-bench:{{steps.resolve-tag.outputs.parameters.tag}}"
+        - - name: resolve-volumes
+            template: resolve-volumes
+            arguments:
+              parameters:
+                - name: target-namespace
+                  value: "{{inputs.parameters.target-namespace}}"
+        - - name: run-bench
+            template: run-bench
+            arguments:
+              parameters:
+                - name: image
+                  value: "zingodevops/sync-bench:{{steps.resolve-tag.outputs.parameters.tag}}"
+                - name: block-count
+                  value: "{{inputs.parameters.block-count}}"
+                - name: concurrency
+                  value: "{{inputs.parameters.concurrency}}"
+                - name: batch-size
+                  value: "{{inputs.parameters.batch-size}}"
+                - name: rust-log
+                  value: "{{inputs.parameters.rust-log}}"
+                - name: target-namespace
+                  value: "{{inputs.parameters.target-namespace}}"
+                - name: node
+                  value: "{{inputs.parameters.node}}"
+                - name: zebra-hostpath
+                  value: "{{steps.resolve-volumes.outputs.parameters.zebra-hostpath}}"
+                - name: tag
+                  value: "{{steps.resolve-tag.outputs.parameters.tag}}"
+
+    - name: resolve-tag
+      inputs:
+        parameters:
+          - name: ref
+          - name: tag
+      container:
+        image: busybox
+        command: [sh, -c]
+        args:
+          - |
+            TAG="{{inputs.parameters.tag}}"
+            if [ -z "$TAG" ]; then
+              # Derive tag from ref: sanitize + truncate
+              TAG=$(echo "{{inputs.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g' | cut -c1-48)
+            fi
+            echo "Resolved tag: $TAG"
+            echo -n "$TAG" > /tmp/tag
+      outputs:
+        parameters:
+          - name: tag
+            valueFrom:
+              path: /tmp/tag
+
+    - name: buildkit
+      inputs:
+        parameters:
+          - name: ref
+          - name: destination
+      container:
+        image: moby/buildkit:v0.21.1-rootless
+        env:
+          - name: BUILDKITD_FLAGS
+            value: --oci-worker-no-process-sandbox
+        command:
+          - buildctl-daemonless.sh
+        args:
+          - build
+          - --frontend
+          - gateway.v0
+          - --opt
+          - source=docker/dockerfile
+          - --opt
+          - context=https://github.com/zingolabs/zaino.git#{{inputs.parameters.ref}}
+          - --opt
+          - filename=live-tests/sync-bench/Containerfile
+          - --output
+          - type=image,name={{inputs.parameters.destination}},push=true
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          seccompProfile:
+            type: Unconfined
+          appArmorProfile:
+            type: Unconfined
+        volumeMounts:
+          - name: docker-config
+            mountPath: /home/user/.docker
+            readOnly: true
+          - name: buildkit-cache
+            mountPath: /home/user/.local/share/buildkit
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: docker-registry-creds
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+        - name: buildkit-cache
+          persistentVolumeClaim:
+            claimName: buildkit-cache
+
+    - name: resolve-volumes
+      inputs:
+        parameters:
+          - name: target-namespace
+      serviceAccountName: snapshot-workflow
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            NS="{{inputs.parameters.target-namespace}}"
+            # Resolve Zebra state hostPath from an existing sync-bench or zebra PVC.
+            HOSTPATH=$(kubectl get pvc zebra-state -n "$NS" -o jsonpath='{.spec.volumeName}' 2>/dev/null)
+            if [ -n "$HOSTPATH" ]; then
+              HOSTPATH=$(kubectl get pv "$HOSTPATH" -o jsonpath='{.spec.csi.volumeHandle}' 2>/dev/null)
+            fi
+            # Fallback: read from an existing sync-bench job.
+            if [ -z "$HOSTPATH" ]; then
+              HOSTPATH=$(kubectl get job -n "$NS" -l app=zaino-sync-bench \
+                -o jsonpath='{.items[0].spec.template.spec.volumes[?(@.name=="zebra-state")].hostPath.path}' 2>/dev/null)
+            fi
+            # Fallback: any sync-bench job.
+            if [ -z "$HOSTPATH" ]; then
+              HOSTPATH=$(kubectl get job sync-bench -n "$NS" \
+                -o jsonpath='{.spec.template.spec.volumes[?(@.name=="zebra-state")].hostPath.path}' 2>/dev/null)
+            fi
+            if [ -z "$HOSTPATH" ]; then
+              echo "ERROR: could not resolve zebra-state volume path" >&2
+              exit 1
+            fi
+            echo "Resolved zebra-state hostPath: $HOSTPATH"
+            echo -n "$HOSTPATH" > /tmp/zebra-hostpath
+      outputs:
+        parameters:
+          - name: zebra-hostpath
+            valueFrom:
+              path: /tmp/zebra-hostpath
+
+    - name: run-bench
+      inputs:
+        parameters:
+          - name: image
+          - name: block-count
+          - name: concurrency
+          - name: batch-size
+          - name: rust-log
+          - name: target-namespace
+          - name: node
+          - name: zebra-hostpath
+          - name: tag
+      resource:
+        action: create
+        successCondition: status.succeeded > 0
+        failureCondition: status.failed > 0
+        manifest: |
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: bench-{{inputs.parameters.tag}}
+            namespace: {{inputs.parameters.target-namespace}}
+            labels:
+              app: zaino-sync-bench
+          spec:
+            activeDeadlineSeconds: 28800
+            ttlSecondsAfterFinished: 7200
+            template:
+              spec:
+                restartPolicy: Never
+                nodeSelector:
+                  kubernetes.io/hostname: {{inputs.parameters.node}}
+                containers:
+                - name: bench
+                  image: {{inputs.parameters.image}}
+                  args:
+                    - "{{inputs.parameters.block-count}}"
+                    - "{{inputs.parameters.concurrency}}"
+                    - "{{inputs.parameters.batch-size}}"
+                  env:
+                    - name: ZEBRA_STATE_DIR
+                      value: /zebra-state
+                    - name: ZAINO_DB_PATH
+                      value: /data/zaino-bench
+                    - name: RUST_LOG
+                      value: "{{inputs.parameters.rust-log}}"
+                    - name: ZAINO_LOG_JSON
+                      value: "1"
+                    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                      value: http://tempo.monitoring.svc:4317
+                  volumeMounts:
+                    - mountPath: /zebra-state
+                      name: zebra-state
+                      readOnly: true
+                    - mountPath: /data
+                      name: bench-data
+                volumes:
+                - hostPath:
+                    path: {{inputs.parameters.zebra-hostpath}}
+                    type: Directory
+                  name: zebra-state
+                - emptyDir:
+                    sizeLimit: 300Gi
+                  name: bench-data
