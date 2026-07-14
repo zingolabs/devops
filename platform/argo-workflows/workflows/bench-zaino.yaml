@@ -38,6 +38,11 @@ spec:
         value: golden-mainnet
       - name: node
         value: tekau
+      # Zebra RocksDB state directory on the node. Resolved from the
+      # golden-mainnet PVC-backed CSI mount. Override if the volume
+      # moves or for a different namespace.
+      - name: zebra-hostpath
+        value: "/var/lib/kubelet/pods/cc3f278f-277c-4bcb-84e1-edbf8699d01d/volumes/kubernetes.io~csi/pvc-787fcbe1-bea1-49be-9daf-9953a3ea8464/mount"
 
   templates:
     - name: bench
@@ -59,6 +64,8 @@ spec:
             default: golden-mainnet
           - name: node
             default: tekau
+          - name: zebra-hostpath
+            default: "/var/lib/kubelet/pods/cc3f278f-277c-4bcb-84e1-edbf8699d01d/volumes/kubernetes.io~csi/pvc-787fcbe1-bea1-49be-9daf-9953a3ea8464/mount"
       steps:
         - - name: resolve-tag
             template: resolve-tag
@@ -76,12 +83,6 @@ spec:
                   value: "{{inputs.parameters.ref}}"
                 - name: destination
                   value: "zingodevops/sync-bench:{{steps.resolve-tag.outputs.parameters.tag}}"
-        - - name: resolve-volumes
-            template: resolve-volumes
-            arguments:
-              parameters:
-                - name: target-namespace
-                  value: "{{inputs.parameters.target-namespace}}"
         - - name: run-bench
             template: run-bench
             arguments:
@@ -101,7 +102,7 @@ spec:
                 - name: node
                   value: "{{inputs.parameters.node}}"
                 - name: zebra-hostpath
-                  value: "{{steps.resolve-volumes.outputs.parameters.zebra-hostpath}}"
+                  value: "{{inputs.parameters.zebra-hostpath}}"
                 - name: tag
                   value: "{{steps.resolve-tag.outputs.parameters.tag}}"
 
@@ -175,44 +176,6 @@ spec:
         - name: buildkit-cache
           persistentVolumeClaim:
             claimName: buildkit-cache
-
-    - name: resolve-volumes
-      inputs:
-        parameters:
-          - name: target-namespace
-      serviceAccountName: snapshot-workflow
-      container:
-        image: bitnami/kubectl:latest
-        command: [sh, -c]
-        args:
-          - |
-            NS="{{inputs.parameters.target-namespace}}"
-            # Resolve Zebra state hostPath from an existing sync-bench or zebra PVC.
-            HOSTPATH=$(kubectl get pvc zebra-state -n "$NS" -o jsonpath='{.spec.volumeName}' 2>/dev/null)
-            if [ -n "$HOSTPATH" ]; then
-              HOSTPATH=$(kubectl get pv "$HOSTPATH" -o jsonpath='{.spec.csi.volumeHandle}' 2>/dev/null)
-            fi
-            # Fallback: read from an existing sync-bench job.
-            if [ -z "$HOSTPATH" ]; then
-              HOSTPATH=$(kubectl get job -n "$NS" -l app=zaino-sync-bench \
-                -o jsonpath='{.items[0].spec.template.spec.volumes[?(@.name=="zebra-state")].hostPath.path}' 2>/dev/null)
-            fi
-            # Fallback: any sync-bench job.
-            if [ -z "$HOSTPATH" ]; then
-              HOSTPATH=$(kubectl get job sync-bench -n "$NS" \
-                -o jsonpath='{.spec.template.spec.volumes[?(@.name=="zebra-state")].hostPath.path}' 2>/dev/null)
-            fi
-            if [ -z "$HOSTPATH" ]; then
-              echo "ERROR: could not resolve zebra-state volume path" >&2
-              exit 1
-            fi
-            echo "Resolved zebra-state hostPath: $HOSTPATH"
-            echo -n "$HOSTPATH" > /tmp/zebra-hostpath
-      outputs:
-        parameters:
-          - name: zebra-hostpath
-            valueFrom:
-              path: /tmp/zebra-hostpath
 
     - name: run-bench
       inputs:
