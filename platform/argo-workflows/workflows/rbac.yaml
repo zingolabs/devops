@@ -46,6 +46,10 @@ rules:
   - apiGroups: ["apps"]
     resources: ["statefulsets", "deployments"]
     verbs: ["*"]
+  # Batch jobs (for bench-zaino workflow)
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1

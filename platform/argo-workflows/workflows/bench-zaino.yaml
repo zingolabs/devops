@@ -32,6 +32,12 @@ spec:
         value: "1000"
       - name: rust-log
         value: "sync_bench=info,zaino_sync=trace"
+      # Binary to run: sync-bench (full engine) or provision-bench (provisioner only)
+      - name: binary
+        value: "sync-bench"
+      # For provision-bench: raw_block, headers_only, headers_spends, current_zaino, all
+      - name: bench-mode
+        value: ""
       - name: tag
         value: ""
       - name: target-namespace
@@ -58,6 +64,10 @@ spec:
             default: "1000"
           - name: rust-log
             default: "sync_bench=info,zaino_sync=trace"
+          - name: binary
+            default: "sync-bench"
+          - name: bench-mode
+            default: ""
           - name: tag
             default: ""
           - name: target-namespace
@@ -97,6 +107,10 @@ spec:
                   value: "{{inputs.parameters.batch-size}}"
                 - name: rust-log
                   value: "{{inputs.parameters.rust-log}}"
+                - name: binary
+                  value: "{{inputs.parameters.binary}}"
+                - name: bench-mode
+                  value: "{{inputs.parameters.bench-mode}}"
                 - name: target-namespace
                   value: "{{inputs.parameters.target-namespace}}"
                 - name: node
@@ -185,6 +199,8 @@ spec:
           - name: concurrency
           - name: batch-size
           - name: rust-log
+          - name: binary
+          - name: bench-mode
           - name: target-namespace
           - name: node
           - name: zebra-hostpath
@@ -202,8 +218,8 @@ spec:
             labels:
               app: zaino-sync-bench
           spec:
-            activeDeadlineSeconds: 28800
-            ttlSecondsAfterFinished: 7200
+            activeDeadlineSeconds: 86400
+            ttlSecondsAfterFinished: 14400
             template:
               spec:
                 restartPolicy: Never
@@ -212,6 +228,7 @@ spec:
                 containers:
                 - name: bench
                   image: {{inputs.parameters.image}}
+                  command: ["{{inputs.parameters.binary}}"]
                   args:
                     - "{{inputs.parameters.block-count}}"
                     - "{{inputs.parameters.concurrency}}"
@@ -227,6 +244,8 @@ spec:
                       value: "1"
                     - name: OTEL_EXPORTER_OTLP_ENDPOINT
                       value: http://tempo.monitoring.svc:4317
+                    - name: BENCH_MODE
+                      value: "{{inputs.parameters.bench-mode}}"
                   volumeMounts:
                     - mountPath: /zebra-state
                       name: zebra-state
