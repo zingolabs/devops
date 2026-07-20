@@ -5,6 +5,7 @@ namespace: authentik
 
 resources:
   - sealed-authentik-secrets.yaml
+  - groups-blueprint.yaml
 
 helmCharts:
   - name: authentik

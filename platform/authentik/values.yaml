@@ -9,8 +9,20 @@ authentik:
     user: authentik
     port: 5432
 
+blueprints:
+  configMaps:
+    - authentik-blueprints
+
 server:
   replicas: 1
+  ingress:
+    enabled: true
+    ingressClassName: tailscale
+    hosts:
+      - authentik
+    tls:
+      - hosts:
+          - authentik
   resources:
     requests:
       cpu: 100m

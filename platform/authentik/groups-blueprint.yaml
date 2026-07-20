@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-blueprints
+  namespace: authentik
+data:
+  groups.yaml: |
+    version: 1
+    metadata:
+      name: Default Groups
+    entries:
+      - model: authentik_core.group
+        identifiers:
+          name: admins
+        attrs:
+          is_superuser: true
+      - model: authentik_core.group
+        identifiers:
+          name: devs
+        attrs:
+          is_superuser: false
