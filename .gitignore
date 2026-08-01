@@ -1,2 +1,5 @@
 /target/
 .secrets/
+
+# Claude Code session worktrees
+.claude/worktrees/
