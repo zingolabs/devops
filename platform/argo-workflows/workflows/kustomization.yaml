@@ -13,3 +13,4 @@ resources:
   - cleanup-ephemeral.yaml
   - bench-zaino.yaml
   - ephemeral-values.yaml
+  - zebra-release-watch.yaml

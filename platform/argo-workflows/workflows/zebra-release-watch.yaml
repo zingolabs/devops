@@ -1,0 +1,106 @@
+# Zebra Release Watch (nightly)
+#
+# Checks the latest ZcashFoundation/zebra GitHub release against the zebra
+# version currently DEPLOYED on golden-mainnet, and — when a newer release is
+# out — posts a Signal alert through the same alertmanager-webhook-signal
+# bridge the cluster's Prometheus alerts already use (so it lands in the same
+# Signal channel; the group ID stays in the sealed webhook secret, untouched).
+#
+# "Deployed" = the version golden-mainnet's zebra actually reports over its
+# metrics endpoint (zebrad_build_info), the same source snapshot-golden reads.
+#
+# Dedup: the last release we alerted on is stored in a ConfigMap in the argo
+# namespace, so a given new release pings once (not every night) until either
+# a newer release appears or golden is bumped past it.
+#
+# Manual run (for testing):
+#   argo submit --from cronwf/zebra-release-watch -n argo
+#
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: zebra-release-watch
+  namespace: argo
+spec:
+  schedules:
+    - "0 9 * * *"              # 09:00 UTC nightly
+  timezone: UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  workflowSpec:
+    entrypoint: check
+    serviceAccountName: snapshot-workflow   # already has cluster-wide configmap access
+    activeDeadlineSeconds: 300
+    ttlStrategy:
+      secondsAfterCompletion: 86400
+    arguments:
+      parameters:
+        - name: zebra-repo
+          value: "ZcashFoundation/zebra"
+        - name: golden-metrics-url
+          value: "http://zebra.golden-mainnet.svc:8080/"
+        - name: signal-webhook-url
+          value: "http://alertmanager-webhook-signal.monitoring.svc:10000/alertmanager"
+        - name: state-configmap
+          value: "zebra-release-watch-state"
+    templates:
+      - name: check
+        script:
+          image: bitnami/kubectl:latest
+          command: [bash]
+          source: |
+            set -euo pipefail
+
+            REPO="{{workflow.parameters.zebra-repo}}"
+            METRICS_URL="{{workflow.parameters.golden-metrics-url}}"
+            SIGNAL_URL="{{workflow.parameters.signal-webhook-url}}"
+            STATE_CM="{{workflow.parameters.state-configmap}}"
+            NS="argo"
+
+            # 1. Latest zebra release tag (parse JSON with grep/sed; strip leading v).
+            latest=$(curl -sSfL -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/releases/latest" \
+              | grep -o '"tag_name"[^,]*' | head -1 \
+              | sed -E 's/.*"tag_name"[: ]*"v?([^"]+)".*/\1/' || true)
+
+            # 2. Version deployed on golden-mainnet, from live metrics.
+            metrics=$(curl -sSf "$METRICS_URL" || true)
+            deployed=$(printf '%s' "$metrics" \
+              | grep -o 'zebrad_build_info{[^}]*version="[0-9][0-9.]*"' | head -1 \
+              | sed -E 's/.*version="([0-9.]+)".*/\1/' || true)
+
+            [ -n "$latest" ] || { echo "ERROR: could not resolve latest zebra release"; exit 1; }
+            [ -n "$deployed" ] || deployed="unknown"
+            echo "latest=$latest deployed=$deployed"
+
+            # 3. Have we already alerted on this release?
+            last=$(kubectl -n "$NS" get configmap "$STATE_CM" \
+              -o jsonpath='{.data.last_alerted}' 2>/dev/null || true)
+
+            # 4. Is latest strictly newer than deployed? (version sort)
+            newer=0
+            if [ "$deployed" = "unknown" ]; then
+              newer=1   # can't read deployed → surface it rather than stay silent
+            else
+              top=$(printf '%s\n%s\n' "$deployed" "$latest" | sort -V | tail -1)
+              [ "$top" = "$latest" ] && [ "$latest" != "$deployed" ] && newer=1
+            fi
+
+            if [ "$newer" = "1" ] && [ "$latest" != "$last" ]; then
+              echo "New zebra ${latest} > deployed ${deployed} — alerting Signal"
+              ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+              payload=$(cat <<EOF
+            {"version":"4","status":"firing","receiver":"signal","groupKey":"zebra-release-watch","alerts":[{"status":"firing","labels":{"alertname":"ZebraReleaseAvailable","severity":"warning","service":"zebra","namespace":"golden-mainnet"},"annotations":{"summary":"New Zebra release ${latest} available","description":"golden-mainnet is running Zebra ${deployed}. Newer release ${latest} is out — bump clusters/production/values/golden-*.yaml and regenerate the golden snapshot."},"startsAt":"${ts}"}]}
+            EOF
+            )
+              curl -sSf -X POST -H "Content-Type: application/json" -d "$payload" "$SIGNAL_URL"
+              kubectl -n "$NS" create configmap "$STATE_CM" \
+                --from-literal=last_alerted="$latest" \
+                --from-literal=deployed_at_alert="$deployed" \
+                --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
+              echo "alerted; recorded last_alerted=${latest}"
+            else
+              echo "no alert (newer=${newer} last_alerted=${last})"
+            fi
