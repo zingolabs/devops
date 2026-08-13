@@ -16,3 +16,5 @@
 users:
   - name: zancas
     logs: true
+  - name: elicbarbieri          # cluster-wide edit (deploy/manage workloads, exec, port-forward)
+    role: edit                   # built-in ClusterRole; aggregates view, so pods/log included
