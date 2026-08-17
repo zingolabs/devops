@@ -7,7 +7,7 @@ zebra:
   testnet: false
   replicas: 1
   image:
-    tag: "6.0.0"
+    tag: "6.3.0"
     hash: ""
   storageClassName: topolvm-thin
   volumes:
