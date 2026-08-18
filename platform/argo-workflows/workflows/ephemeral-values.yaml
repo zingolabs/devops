@@ -96,7 +96,10 @@ data:
       storageClassName: topolvm-thin
       volumes:
         data:
-          size: 100Gi
+          # Match golden-mainnet's zaino volume so a cache restore
+          # (use-zaino-cache=true) from the 200Gi golden snapshot fits;
+          # topolvm-thin means this is a thin allocation, not reserved.
+          size: 200Gi
           dataSource:
             kind: VolumeSnapshot
             apiGroup: snapshot.storage.k8s.io
