@@ -43,6 +43,7 @@ spec:
           command: [sh, -euc]
           args:
             - |
+              apk add --no-cache openssl >/dev/null   # image has curl+jq, not openssl (needed to RS256-sign the App JWT)
               REPO="{{workflow.parameters.repo}}"
               b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
               now=$(date +%s)
