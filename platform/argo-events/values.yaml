@@ -1,0 +1,7 @@
+# Argo Events controller
+# Installs the cluster-wide controller that watches EventBus, EventSource,
+# and Sensor CRDs across all namespaces.
+controller:
+  rbac:
+    enabled: true
+    namespaced: false
