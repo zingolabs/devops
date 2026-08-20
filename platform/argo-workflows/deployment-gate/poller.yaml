@@ -36,6 +36,13 @@ spec:
       parameters:
         - name: repo
           value: nachog00/zaino-pipeline-sandbox   # TODO(prod): zingolabs/zaino
+        # The deployment-gate SUITE is a named, swappable WorkflowTemplate — the
+        # poller (the gate, stably mapped to the rc->release-ready advance) never
+        # hardcodes what validation runs. Point this at a different template to
+        # change the suite; its CONTENT (serve-zaino depth, fixtures, metrics,
+        # manual sign-off) is entirely the template's concern.
+        - name: gate-workflow
+          value: deployment-gate
     templates:
       - name: poll
         container:
