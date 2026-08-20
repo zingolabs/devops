@@ -1,0 +1,143 @@
+# Deployment-gate WorkflowTemplate — the CLUSTER SIDE of the release pipeline's
+# deployment gate (see zingolabs/zaino docs/decision_records/release/
+# implementation.md § "The deployment-gate bridge").
+#
+# Triggered by the `deployment-gate` Sensor (this dir) when the release pipeline
+# creates a GitHub Deployment (environment `deployment`) for an RC commit. It:
+#   1. reports `deployment_status: in_progress` back to GitHub,
+#   2. boots mainnet zebra + the RC's zainod via `serve-zaino` (warm-start from
+#      the golden snapshot by default — validate at the tip in minutes/hours;
+#      set use-cache=false for a fresh full-index sync over days),
+#   3. runs automated validation (bench/fixtures) and, optionally, SUSPENDS for
+#      a human tester to sync a wallet / send txs and approve (`argo resume`),
+#   4. reports `deployment_status: success | failure` — which the pipeline's
+#      `deployment-advance.yml` reacts to by advancing `release-ready`,
+#   5. tears the namespace down.
+#
+# STATUS: idiomatic scaffold — NOT yet validated on the cluster. Needs the
+# GitHub App secret (deployments:write) wired (see README.md) and the validation
+# thresholds finalised. Reuses existing templates: serve-zaino, bench-zaino,
+# cleanup-ephemeral.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: deployment-gate
+  namespace: argo
+spec:
+  entrypoint: gate
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: ref            # the RC commit sha (from the GitHub Deployment)
+        value: ""
+      - name: deployment-id  # GitHub Deployment id, for posting status back
+        value: ""
+      - name: namespace      # ephemeral namespace, e.g. deploy-gate-<rc.sha>
+        value: ""
+      - name: use-cache      # true = warm-start from golden snapshot (tip validation)
+        value: "true"
+      - name: repo
+        value: zingolabs/zaino
+      - name: manual-approval  # true = suspend for a human sign-off after auto checks
+        value: "false"
+
+  templates:
+    - name: gate
+      steps:
+        - - name: report-in-progress
+            template: post-deployment-status
+            arguments:
+              parameters: [{ name: state, value: in_progress }]
+
+        # Boot zebra + the RC's zainod. serve-zaino builds the image from `ref`,
+        # clones the golden snapshot (warm-start) and helm-installs it.
+        - - name: deploy
+            templateRef: { name: serve-zaino, template: serve }
+            arguments:
+              parameters:
+                - { name: ref, value: "{{workflow.parameters.ref}}" }
+                - { name: namespace, value: "{{workflow.parameters.namespace}}" }
+                - { name: use-cache, value: "{{workflow.parameters.use-cache}}" }
+                - { name: expose, value: "true" }
+
+        # Automated validation at the tip: sync/serve health + benchmarks. Treat
+        # a non-zero result as a gate failure (handled by the exit handler).
+        - - name: validate
+            templateRef: { name: bench-zaino, template: bench }
+            arguments:
+              parameters:
+                - { name: namespace, value: "{{workflow.parameters.namespace}}" }
+
+        # Optional human-in-the-loop: a tester syncs a wallet against the exposed
+        # zainod, sends txs, then `argo resume` (approve) or `argo stop` (reject).
+        - - name: manual-signoff
+            template: await-manual-approval
+            when: "'{{workflow.parameters.manual-approval}}' == 'true'"
+
+        - - name: report-success
+            template: post-deployment-status
+            arguments:
+              parameters: [{ name: state, value: success }]
+
+    # Suspend until a human resumes — the "manual" validation dimension.
+    - name: await-manual-approval
+      suspend: {}
+
+    # ---- report failure on ANY step error, then always clean up ----
+    - name: exit-handler
+      steps:
+        - - name: report-failure
+            template: post-deployment-status
+            when: "'{{workflow.status}}' != 'Succeeded'"
+            arguments:
+              parameters: [{ name: state, value: failure }]
+        - - name: teardown
+            templateRef: { name: cleanup-ephemeral, template: cleanup }
+            arguments:
+              parameters:
+                - { name: namespace, value: "{{workflow.parameters.namespace}}" }
+
+    # ---- POST a deployment_status back to GitHub, authenticated as the App ----
+    # Mints an installation token from the App private key (JWT RS256 → token)
+    # and POSTs the status for this Deployment. `github-app` secret = the App
+    # private key; APP_ID / INSTALLATION_ID from `github-app-meta`.
+    # NOTE: token-mint + POST need cluster validation (openssl/curl in-image).
+    - name: post-deployment-status
+      inputs:
+        parameters:
+          - name: state   # in_progress | success | failure
+      container:
+        image: dwdraju/alpine-curl-jq:latest   # curl + jq + openssl
+        command: [sh, -euc]
+        args:
+          - |
+            b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+            now=$(date +%s)
+            hdr=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+            pld=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((now-60))" "$((now+540))" "$APP_ID" | b64url)
+            sig=$(printf '%s.%s' "$hdr" "$pld" | openssl dgst -sha256 -sign /secrets/privateKey -binary | b64url)
+            jwt="$hdr.$pld.$sig"
+            tok=$(curl -sSf -X POST -H "Authorization: Bearer $jwt" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens" | jq -r .token)
+            curl -sSf -X POST -H "Authorization: token $tok" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/deployments/$DEPLOYMENT_ID/statuses" \
+              -d "$(jq -n --arg s "{{inputs.parameters.state}}" \
+                    '{state:$s, environment:"deployment", description:("deployment gate: "+$s)}')"
+            echo "posted deployment_status={{inputs.parameters.state}} for deployment $DEPLOYMENT_ID"
+        env:
+          - { name: REPO, value: "{{workflow.parameters.repo}}" }
+          - { name: DEPLOYMENT_ID, value: "{{workflow.parameters.deployment-id}}" }
+          - name: APP_ID
+            valueFrom: { secretKeyRef: { name: github-app-meta, key: appID } }
+          - name: INSTALLATION_ID
+            valueFrom: { secretKeyRef: { name: github-app-meta, key: installationID } }
+        volumeMounts:
+          - { name: github-app-key, mountPath: /secrets, readOnly: true }
+      volumes:
+        - name: github-app-key
+          secret: { secretName: github-app, items: [{ key: privateKey, path: privateKey }] }
+
+  # Failure of any step reports `deployment_status: failure` + tears down.
+  onExit: exit-handler

@@ -1,0 +1,3 @@
+name: deployment-gate
+namespace: argo
+sourcePath: platform/argo-workflows/deployment-gate

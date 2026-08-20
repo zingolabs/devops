@@ -1,0 +1,83 @@
+# Deployment-gate poller — the cluster-driven monitor.
+#
+# The deployment gate is entirely OUTBOUND from the cluster: no public endpoint,
+# no inbound webhook, no runner joining the tailnet. This CronWorkflow polls
+# GitHub for RC Deployments (environment `deployment`) that have no status yet
+# (freshly created by the pipeline's rc-gate), and drives the gate for each:
+#
+#   TRIVIAL (this initial connection test): post `deployment_status: success`.
+#   REAL (later): submit the `deployment-gate` WorkflowTemplate (serve-zaino →
+#         bench-zaino / manual sign-off), which posts success|failure itself.
+#
+# A Deployment with any status is already claimed, so it is skipped next tick —
+# the Deployment's own status is the dedup state (no external bookkeeping).
+#
+# Auth is all outbound to api.github.com, as the release GitHub App:
+#   secret `github-app`      key `privateKey`  — the App .pem
+#   secret `github-app-meta` keys appID, installationID
+# The status the App posts re-triggers the pipeline's `deployment-advance`
+# (a GITHUB_TOKEN-posted status would not).
+#
+# STATUS: not yet cluster-validated (the JWT mint + API calls). REPO points at
+# the sandbox for the connection test; set it to zingolabs/zaino for production.
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: deployment-gate-poller
+  namespace: argo
+spec:
+  schedule: "*/2 * * * *"        # every 2 minutes
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 60
+  workflowSpec:
+    serviceAccountName: snapshot-workflow
+    entrypoint: poll
+    arguments:
+      parameters:
+        - name: repo
+          value: nachog00/zaino-pipeline-sandbox   # TODO(prod): zingolabs/zaino
+    templates:
+      - name: poll
+        container:
+          image: dwdraju/alpine-curl-jq:latest
+          command: [sh, -euc]
+          args:
+            - |
+              REPO="{{workflow.parameters.repo}}"
+              b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+              now=$(date +%s)
+              hdr=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+              pld=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((now-60))" "$((now+540))" "$APP_ID" | b64url)
+              sig=$(printf '%s.%s' "$hdr" "$pld" | openssl dgst -sha256 -sign /secrets/privateKey -binary | b64url)
+              jwt="$hdr.$pld.$sig"
+              tok=$(curl -sSf -X POST -H "Authorization: Bearer $jwt" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens" | jq -r .token)
+              gh() { curl -sSf -H "Authorization: token $tok" -H "Accept: application/vnd.github+json" "$@"; }
+
+              # RC deployments in the `deployment` environment, newest first.
+              deps=$(gh "https://api.github.com/repos/$REPO/deployments?environment=deployment&per_page=20")
+              echo "$deps" | jq -r '.[] | "\(.id) \(.sha)"' | while read -r id sha; do
+                n=$(gh "https://api.github.com/repos/$REPO/deployments/$id/statuses?per_page=1" | jq 'length')
+                if [ "$n" = "0" ]; then
+                  echo "new deployment $id ($sha) -> trivial pass"
+                  # TRIVIAL: post success. REAL: submit the deployment-gate
+                  # WorkflowTemplate here (argo submit --from workflowtemplate/deployment-gate
+                  # -p ref=$sha -p deployment-id=$id) and let it post the result.
+                  gh -X POST "https://api.github.com/repos/$REPO/deployments/$id/statuses" \
+                    -d '{"state":"success","environment":"deployment","description":"deployment gate (trivial connection test): success"}' >/dev/null
+                  echo "posted success for deployment $id"
+                else
+                  echo "deployment $id already claimed ($n statuses); skipping"
+                fi
+              done
+          env:
+            - name: APP_ID
+              valueFrom: { secretKeyRef: { name: github-app-meta, key: appID } }
+            - name: INSTALLATION_ID
+              valueFrom: { secretKeyRef: { name: github-app-meta, key: installationID } }
+          volumeMounts:
+            - { name: github-app-key, mountPath: /secrets, readOnly: true }
+        volumes:
+          - name: github-app-key
+            secret: { secretName: github-app, items: [{ key: privateKey, path: privateKey }] }
