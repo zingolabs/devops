@@ -1,7 +1,7 @@
 # State-mode zaino against a shared golden zebra cache — Design
 
 **Date:** 2026-08-18
-**Status:** Approved design; capacity + chart hooks verified; phased testnet-first (see §2.6, §7)
+**Status:** Approved; chart hooks landed (Plan 1 merged); capacity solved by reclaiming ~612G on tekau → **mainnet-direct** (no testnet phase). See §2.6, §7.1.
 **Repos touched:** `zingolabs/devops` (workflow, defs, docs), `zingolabs/zcash-stack` (Helm chart)
 
 ## 1. Problem & goal
@@ -40,14 +40,16 @@ router).
    - **Cluster reality (verified):** 2 nodes — `tekau` (control-plane) holds
      *all* topolvm storage; `arbeitspferd` (worker) has none. So both the writer
      and every reader must run on `tekau` regardless.
-   - **Capacity constraint (verified):** a hostPath on tekau's root fs
-     (`/dev/nvme0n1p2`, ~341Gi free but **81% used**, shared with
-     containerd/k3s) is **not safe** for a second ~260Gi cache. `data_vg`
-     (~1.82 TiB, single PV) has only **~122 GiB unallocated** physical extents —
-     less than mainnet needs — and its thin pool is **1.70 TiB at ~70% physical
-     use**, the shared substrate for every topolvm PVC + both golden zebras
-     (filling it toward 100% corrupts all thin volumes). So there is **no clean
-     dedicated ~260Gi slot for mainnet today**. This drives the phasing in §2.6.
+   - **Capacity (resolved 2026-08-20):** tekau has two disks — `nvme1n1`
+     (1.8 TiB) is entirely the topolvm pool; `nvme0n1p2` is the ext4 **root fs**.
+     Root fs was 81% full, but ~612G of stale chain caches (a defunct host
+     `/state/v27`, and pua's `zebra-mainnet-seed` / `zas_zainos` / zaino mainnet
+     dumps) were reclaimed, leaving **~953 GiB free (46%)**. The mainnet cache
+     therefore lives as a **plain hostPath directory on the root disk**
+     (`/srv/zebra-state-cache-mainnet`) — no LV, and on a *different physical
+     disk* from the topolvm pool, so the rocksdb writer is IO-isolated from the
+     PVC workloads and never touches the thin pool. (Watch root-fs headroom as
+     the cache grows; ~953G leaves years of runway for a ~260G mainnet cache.)
 4. **Seed from existing golden.** A fresh mainnet sync is multi-day; we seed the
    new cache once from a consistent LVM snapshot of the existing golden zebra,
    then let the new zebra catch up the last blocks. Seed source and new zebra
@@ -62,24 +64,20 @@ router).
    inputs with sensible defaults and deploys whatever zaino ref reads them;
    end-to-end validation follows once a ref wires
    `ZebraReadStateAdapter::open`.
-6. **Phasing: testnet first, mainnet after a disk.**
-   - **Phase 1 (now): testnet.** `golden-zebra-state` runs **testnet**, seeded
-     from the existing `golden-testnet` zebra. The testnet cache is small and
-     fits in the ~122 GiB free VG extents (a modest dedicated LV), so we can
-     build and validate the *entire* pipeline — chart changes, shared-cache
-     mount, state-mode zaino, and the read-only-open path — with no capacity
-     risk and no hardware.
-   - **Phase 2 (later): mainnet.** Once a disk is added to `data_vg` (§7.1),
-     stand up a mainnet `golden-zebra-state` on a clean dedicated LV, seeded from
-     `golden-mainnet`. Same design; only the network, seed source, and LV size
-     change (both are already network-parametric).
+6. **Mainnet-direct (revised 2026-08-20).** The original plan was testnet-first,
+   forced by a capacity crunch. Reclaiming ~612G on the root disk (§2.3) removed
+   that constraint, so we go straight to **mainnet**: `golden-zebra-state` runs
+   mainnet, cache in a hostPath dir on the root fs, seeded from the live k8s
+   `golden-mainnet` (a current, consistent LVM snapshot — better than any stale
+   on-host seed). No testnet detour, no LV surgery. The chart hooks (Plan 1) are
+   network-parametric, so nothing about them changes for mainnet.
 
 ## 3. Architecture
 
 ```
  node: tekau
  ┌──────────────────────────────────────────────────────────────┐
- │  hostPath: /srv/zebra-state-cache-<network>  (shared local)   │
+ │  hostPath: /srv/zebra-state-cache-mainnet  (root disk)        │
  │        ▲ RW                       ▲ RO         ▲ RO           │
  │   ┌────┴─────┐              ┌──────┴────┐  ┌────┴──────┐       │
  │   │ golden-  │  JSON-RPC    │ state     │  │ state     │  ...  │
@@ -98,15 +96,14 @@ router).
 
 ## 4. Components
 
-### 4.1 `golden-zebra-state` (new shared-cache zebra singleton)
-Instantiated **per network** per the phasing (§2.6) — Phase 1 is testnet.
-- New ArgoCD-managed app: `domain/defs/golden-zebra-state-<network>.yaml` +
-  `clusters/production/values/golden-zebra-state-<network>.yaml`.
-- Zebra image = **same version as the golden it seeds from** (Phase 1:
-  `golden-testnet`; Phase 2: `golden-mainnet` @ 6.3.0) — must match so the
-  on-disk `state/vN` format aligns and no reindex triggers on first open.
-- Cache on a **fixed hostPath** on `tekau` (`/srv/zebra-state-cache-<network>`),
-  mounted **RW** at `/var/cache/zebrad-cache`.
+### 4.1 `golden-zebra-state` (new shared-cache zebra singleton — mainnet)
+- New ArgoCD-managed app: `domain/defs/golden-zebra-state.yaml` +
+  `clusters/production/values/golden-zebra-state.yaml`.
+- Zebra image = **same version as `golden-mainnet`** (`zfnd/zebra:6.3.0`) — must
+  match so the on-disk `state/vN` format aligns and no reindex triggers on first
+  open.
+- Cache on a **fixed hostPath** on `tekau` (`/srv/zebra-state-cache-mainnet`, on
+  the root disk `nvme0n1`), mounted **RW** at `/var/cache/zebrad-cache`.
 - `nodeAffinity` → `tekau`.
 - Exposes JSON-RPC **8232**; **indexer gRPC 8230** conditional on §7.2.
 - Health endpoint 8080 as today.
@@ -174,17 +171,13 @@ Instantiated **per network** per the phasing (§2.6) — Phase 1 is testnet.
 
 ## 7. Open items (resolve before/at implementation)
 
-1. **Dedicated cache mount on `tekau` — host-level, per phase (§2.6).**
-   Verified: `data_vg` has ~122 GiB unallocated; thin pool 1.70 TiB at ~70%.
-   - **Phase 1 (testnet):** carve a modest **dedicated LV** sized to the testnet
-     cache (confirm current `golden-testnet` usage; likely well under 122Gi),
-     `mkfs`, mount at e.g. `/srv/zebra-state-cache-testnet` (persist in fstab).
-     **Host action — user runs it.** Fits in existing free extents, no hardware.
-   - **Phase 2 (mainnet):** requires **adding a disk** to `data_vg` first, then
-     a clean dedicated ~400Gi LV at e.g. `/srv/zebra-state-cache-mainnet`. (A
-     thin LV in the existing 70%-full shared pool was rejected — pool-exhaustion
-     risk to all volumes.)
-   The chart/workflow just reference the mount path; the LV/mount is host-level.
+1. **Cache directory on `tekau` — trivial host step (resolved).**
+   No LV needed: root fs now has ~953 GiB free (§2.3). Just
+   `mkdir -p /srv/zebra-state-cache-mainnet` on tekau (owned so the zebra
+   container uid 2001 can write — the chart's `set-permissions` init `chown`s it
+   on first start, so an empty dir suffices). The chart/workflow reference this
+   path via `zebra.volumes.data.hostPath` and `zaino.zebraCache.hostPath`.
+   Operational note: monitor root-fs usage as the cache grows.
 2. **Indexer gRPC (8230)** — does the target zaino ref's non-state fallback use
    JSON-RPC 8232 or the indexer gRPC 8230? Confirmed absent from both chart and
    golden zebra today. If gRPC is required, we must add zebra indexer config
@@ -215,18 +208,12 @@ Instantiated **per network** per the phasing (§2.6) — Phase 1 is testnet.
 - Fix (separately) the latent double-`(default)` storage-class misconfig noted
   during investigation.
 
-## 10. Implementation sequencing (for the plan)
+## 10. Implementation sequencing (mainnet-direct)
 
-**Phase 1 — testnet (build + validate the whole pipeline):**
-1. Confirm `golden-testnet` cache size; provision the dedicated testnet cache LV
-   + mount on `tekau` (§7.1) — host-level gate, user action.
-2. `zcash-stack` chart changes (§5) — additive, gated toggles; bump `Chart.yaml`.
-3. `golden-zebra-state` (testnet) def + values + seed job from `golden-testnet`
-   (§4.1, §4.2).
-4. `deploy-ephemeral` state-mode path (§6) + docs (§9).
-5. End-to-end validation with a zaino ref that wires the read-only-open path.
-
-**Phase 2 — mainnet (after a disk is added):**
-6. Add disk to `data_vg`; provision the mainnet cache LV + mount.
-7. Stand up mainnet `golden-zebra-state`, seeded from `golden-mainnet`; reuse
-   everything from Phase 1 with network/seed/size changed.
+1. ~~`zcash-stack` chart changes (§5)~~ — **DONE (Plan 1, merged to main).**
+2. `mkdir /srv/zebra-state-cache-mainnet` on tekau (§7.1) — trivial host step.
+3. **Plan 2:** `golden-zebra-state` (mainnet) def + values + seed job from
+   `golden-mainnet` (§4.1, §4.2).
+4. **Plan 3:** `deploy-ephemeral` state-mode path (§6) + docs (§9).
+5. End-to-end validation with a zaino ref that wires the read-only-open path
+   (resolve §7.2 indexer-gRPC + §7.3 backend selector against that ref).
