@@ -1,0 +1,12 @@
+name: golden-zebra-state
+namespace: golden-zebra-state
+type: helm-git
+chartRepo: https://github.com/zingolabs/zcash-stack
+chartPath: charts/zcash-stack
+chartRevision: main
+valuesFile: clusters/production/values/golden-zebra-state.yaml
+ignoreDifferences:
+  - group: apps
+    kind: StatefulSet
+    jsonPointers:
+      - /spec/replicas
