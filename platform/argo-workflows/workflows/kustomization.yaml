@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - rbac.yaml
   - snapshot-golden.yaml
+  - seed-zebra-state-cache.yaml
   - build-zaino.yaml
   - buildkit-cache-pvc.yaml
   - deploy-ephemeral.yaml

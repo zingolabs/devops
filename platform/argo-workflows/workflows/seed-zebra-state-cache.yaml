@@ -1,0 +1,131 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: seed-zebra-state-cache
+  namespace: argo
+spec:
+  serviceAccountName: snapshot-workflow
+  entrypoint: seed
+  arguments:
+    parameters:
+      - name: source-namespace
+        value: golden-mainnet
+      - name: source-pvc
+        value: zebra-data-zebra-0
+      - name: node
+        value: tekau
+      - name: host-path
+        value: /srv/zebra-state-cache-mainnet
+      - name: snapshot-class
+        value: topolvm-snapshot
+      - name: storage-class
+        value: topolvm-thin
+      - name: seed-pvc-size
+        value: 350Gi
+  templates:
+    - name: seed
+      steps:
+        - - name: snapshot
+            template: make-snapshot
+        - - name: seed-pvc
+            template: make-seed-pvc
+        - - name: copy
+            template: copy-job
+        - - name: cleanup
+            template: cleanup
+
+    - name: make-snapshot
+      resource:
+        action: create
+        setOwnerReference: false
+        successCondition: status.readyToUse == true
+        manifest: |
+          apiVersion: snapshot.storage.k8s.io/v1
+          kind: VolumeSnapshot
+          metadata:
+            name: zebra-state-seed-snap
+            namespace: '{{workflow.parameters.source-namespace}}'
+          spec:
+            volumeSnapshotClassName: '{{workflow.parameters.snapshot-class}}'
+            source:
+              persistentVolumeClaimName: '{{workflow.parameters.source-pvc}}'
+
+    - name: make-seed-pvc
+      # NOTE: no wait-for-Bound — topolvm-thin is WaitForFirstConsumer, so the
+      # PVC stays Pending until the copy Job (next step) schedules and binds it.
+      resource:
+        action: create
+        setOwnerReference: false
+        manifest: |
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: zebra-state-seed-src
+            namespace: '{{workflow.parameters.source-namespace}}'
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            storageClassName: '{{workflow.parameters.storage-class}}'
+            resources:
+              requests:
+                storage: '{{workflow.parameters.seed-pvc-size}}'
+            dataSource:
+              apiGroup: snapshot.storage.k8s.io
+              kind: VolumeSnapshot
+              name: zebra-state-seed-snap
+
+    - name: copy-job
+      resource:
+        action: create
+        setOwnerReference: false
+        successCondition: status.succeeded == 1
+        failureCondition: status.failed > 0
+        manifest: |
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: zebra-state-seed-copy
+            namespace: '{{workflow.parameters.source-namespace}}'
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 86400
+            ttlSecondsAfterFinished: 3600
+            template:
+              spec:
+                restartPolicy: Never
+                nodeSelector:
+                  kubernetes.io/hostname: '{{workflow.parameters.node}}'
+                containers:
+                  - name: copy
+                    image: busybox:latest
+                    command: ["/bin/sh", "-c"]
+                    args:
+                      - |
+                        set -e
+                        echo "seeding {{workflow.parameters.host-path}} from snapshot..."
+                        cp -a /src/. /dst/
+                        chown 2001:2001 /dst
+                        echo "done; contents:"; ls -la /dst
+                    volumeMounts:
+                      - name: src
+                        mountPath: /src
+                        readOnly: true
+                      - name: dst
+                        mountPath: /dst
+                volumes:
+                  - name: src
+                    persistentVolumeClaim:
+                      claimName: zebra-state-seed-src
+                  - name: dst
+                    hostPath:
+                      path: '{{workflow.parameters.host-path}}'
+                      type: DirectoryOrCreate
+
+    - name: cleanup
+      resource:
+        action: delete
+        manifest: |
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: zebra-state-seed-src
+            namespace: '{{workflow.parameters.source-namespace}}'
