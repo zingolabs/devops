@@ -1,0 +1,32 @@
+# Mainnet zebra whose state cache lives on a hostPath (tekau root disk),
+# read live by state-mode zainos. Zebra only — no zaino/lightwalletd/zcashd.
+ingress:
+  enabled: false
+
+zebra:
+  enabled: true
+  name: zebra
+  testnet: false
+  replicas: 1
+  image:
+    tag: "6.3.0"
+    hash: ""
+  # Plan-1 chart hook: back the state cache with a hostPath dir (omits the PVC).
+  volumes:
+    data:
+      hostPath: /srv/zebra-state-cache-mainnet
+  # Plan-1 chart hook: pin to the storage node.
+  nodeSelector:
+    kubernetes.io/hostname: tekau
+  requests:
+    cpu: 2
+    memory: 4Gi
+  limits:
+    memory: 24Gi
+
+zaino:
+  enabled: false
+lightwalletd:
+  enabled: false
+zcashd:
+  enabled: false
