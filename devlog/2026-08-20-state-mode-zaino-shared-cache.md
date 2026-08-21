@@ -1,0 +1,112 @@
+# 2026-08-20/21 — State-mode zaino against a shared live golden-zebra cache: design, capacity dig, chart hooks
+
+Continuation of the readstate-mode direction flagged in [devops#6]. Goal: infra to deploy
+ephemeral **state-mode** zainos that read a **shared, live** golden-zebra RocksDB cache
+directly (fast historical/state reads) and fall back to that zebra's RPC for the rest.
+Brainstorm → spec → Plan 1 (chart) implemented + merged. Design pivoted mid-session from
+testnet-first to **mainnet-direct** after a storage dig freed ~612G on tekau.
+
+## The load-bearing discovery — there are TWO "state modes" in zaino
+- **`backend = "direct"` (alias `"state"`) — the shipping daemon path.** Despite the name it does
+  NOT read-only-attach to a running zebra. It spawns zaino's *own* zebra syncer
+  (`init_read_state_with_syncer`) that pulls blocks over the validator's gRPC and **writes them into
+  zaino's own DB copy** at `zebra_db_path`. Needs write + a live zebra gRPC. Not "mount a RO copy".
+- **`ZebraReadStateAdapter::open(cache_dir, network)` — the true read-only reader.** Opens zebra's
+  finalized-state RocksDB read-only via `zebra_state::init_read_only`, no syncer, no RPC. New crate
+  `zaino-source-zebra-readstate` on branch **`rc/0.8.0`** (0.8.0-rc.3). This is our mental model —
+  but it is **not wired to any `zainod.toml` selector yet**; only exercised via a doc example.
+- **Consequence → ref-agnostic seam.** The infra can't assume a config key exists. It provides the
+  mount + config params (`backend`, `zebra_db_path`) and deploys whatever zaino ref reads them;
+  end-to-end validation waits on a ref that actually calls `open()`.
+
+## What state-mode serves from the cache vs. still needs the validator
+- **Cache-dir alone (no validator):** blocks, transactions, confirmed tip/height, address
+  balances & UTXOs, treestate, subtree roots, `getblockchaininfo`.
+- **Needs RPC fallback to zebra:** mempool, `send_transaction`, streaming `SubscribeChainTip`
+  (the read-only open yields no `ChainTipChange` — a poller sees the tip advance, a subscriber
+  doesn't), and `GetAddressDeltas`. zaino's composite router is readstate-first / RPC-fallback.
+- So a state zaino still wires RPC to the same zebra for the non-state surface.
+
+## Storage: why a shared *live* cache is hard, and the chosen model
+- **A separate ephemeral pod can't share golden's live volume.** RWO access mode (one node),
+  topolvm is node-local ext4 (not a cluster FS — two mounts corrupt), and thin snapshots are
+  point-in-time. All three independently forbid it. Live-share needs either co-location on one
+  local FS, or an RWX network FS.
+- **No RWX class exists** (only `local-path` + `topolvm-thin`, both RWO). Standing up NFS/CephFS
+  would clear the access-mode wall but puts a hot ~260G RocksDB **writer** on a network FS
+  (discouraged/fragile). Rejected.
+- **Chosen: single-node shared hostPath on tekau.** Local FS = exactly what rocksdb's read-state
+  wants. All pods pinned to tekau (already the only storage node). One live zebra writer, many
+  RO readers. Cross-namespace sharing works because hostPath is node-scoped (a PVC is not).
+
+## Capacity dig → the mainnet-direct pivot (the session's turn)
+- Cluster is 2 nodes: **tekau** (control-plane) holds *all* topolvm storage; **arbeitspferd**
+  (worker) none. Two physical disks on tekau: **nvme1n1** (1.8T) = the topolvm `data_vg`;
+  **nvme0n1p2** = the ext4 **root fs**.
+- topolvm side is tight: VG free **~122G**, thin pool 1.70T at **~70%** physical (shared substrate
+  for every PVC + both golden zebras — filling it corrupts all thin vols). No clean mainnet slot.
+- Root fs was **81% full** — but the 1.3T was **`/home/pua`** (uid 1001), not system: **517G**
+  rootless podman storage, **265G** `zebra-mainnet-seed`, **213G** `zas_zainos`, **58G** zaino
+  mainnet data, plus a defunct root `/state/v27` (**79G**, mtime **2025-09-11**, v27 = pre-Ironwood
+  format). Evidence pua had hand-prototyped state-mode on the host.
+- **Verified safe before deleting:** the live `zebrad`/`zainod` in host `ps` are the **k8s pods**
+  (cwd `/home/zebra`, `cache_dir=/var/cache/zebrad-cache` → `state/v28/...` on their topolvm PVCs,
+  confirmed via `/proc/<pid>/root/etc/zebrad/zebrad.toml` + lsof). Nothing held the target dirs
+  open. (Note: `fuser -m` is useless here — with everything on one root fs it reports *all* root-fs
+  users, not per-dir refs. The process/lsof/mtime evidence is what mattered.)
+- **Reclaimed ~612G** (the three chain-data dumps + `/state`; left the 517G podman store + a 21G
+  `/home/pua/zebra` source checkout alone). Root fs **341G→953G free (81%→46%)**. Ran as a
+  hand-off script — the auto-mode classifier (correctly) blocks bulk remote `rm -rf`.
+- **Pivot: mainnet-direct.** Testnet-first only existed to dodge capacity. With 953G free on the
+  **root disk** (a *different* physical disk from the topolvm pool → IO-isolated, and no thin-pool
+  risk), the mainnet cache is just a **plain hostPath dir** `mkdir /srv/zebra-state-cache-mainnet`.
+  **No LV cutting, no testnet detour.** Seed from the live k8s `golden-mainnet` snapshot (current +
+  consistent) rather than pua's stale on-host seed.
+
+## Plan 1 — zcash-stack chart hooks (DONE, merged to main, chart 0.0.23)
+All additive, gated, defaults preserve current render; each verified with `helm template`/`lint`.
+- Value-driven zaino `backend` + `zebra_db_path` (were hardcoded `fetch` / `/home/zaino/.cache/zebra`).
+- **Latent bug fixed:** `init-rpc` derived its wait port from `zebra.enabled`, so a zaino pointed at
+  an *external* testnet zebra would wait on `:8232` while testnet listens on `:18232`. Added
+  `zaino.rpcPort` override.
+- `zaino.zebraCache` — optional **read-only** hostPath mount of the shared cache.
+- `zebra.volumes.data.hostPath` — optional hostPath cache source (omits the volumeClaimTemplate).
+- `nodeSelector`/`affinity`/`tolerations` on zebra + zaino (were absent). `zebra.enabled` already
+  existed. Indexer-gRPC :8230 deliberately deferred.
+- Combined state-mode render verified: 1 StatefulSet (zaino only, zebra absent), RO zebra-cache mount,
+  `backend='state'`, testnet ports, tekau affinity.
+- **Consumption is via `type: helm-git`** (ArgoCD pulls the chart from git `main`); the "Release
+  Charts" Actions workflow has in fact **never run** (0 runs, no gh-pages) — irrelevant, since
+  nothing consumes a packaged release. So merging to main *is* the release for our purposes.
+
+## Design decisions locked
+- Shared live zebra → many state zainos; new **`golden-zebra-state`** (mainnet, `zfnd/zebra:6.3.0`,
+  hostPath cache on root disk, nodeAffinity tekau, exposes :8232) **separate** from `golden-mainnet`.
+- One-time **seed** from a `golden-mainnet` LVM snapshot (matching zebra version → no reindex).
+- **Ref-agnostic config seam** (see above). Cleanup must never `rm` the shared hostPath cache.
+
+## Open items
+- **Indexer gRPC :8230** — does the target zaino ref's non-state fallback speak JSON-RPC 8232 or the
+  indexer gRPC 8230? If the latter, `golden-zebra-state` must run zebra's indexer (confirm 6.3.0
+  supports it; golden doesn't run it today). Resolve against the ref.
+- **`backend` selector value** (`state` vs `direct` vs new) — pin against the ref that wires `open()`.
+- Root-fs cache growth has no hard cap (plain dir) — monitor; optionally quota/LV later.
+- Double-`(default)` storage-class misconfig (both `local-path` and `topolvm-thin` flagged default).
+
+## Artifacts
+- Spec: `docs/superpowers/specs/2026-08-18-state-mode-zaino-shared-cache-design.md` (devops
+  `d93b901`, `9a68db3`, `16f8528` mainnet-pivot).
+- Plan 1: `docs/superpowers/plans/2026-08-20-state-mode-zaino-chart-changes.md` (devops `5d43829`).
+- zcash-stack (branch `feat/state-mode-cache-hooks`, FF-merged to `main` @ `4167db7`): commits
+  `892699c` backend/db-path, `3197ef3` rpcPort, `8d343e8` zebraCache, `2466439` zebra hostPath,
+  `d0e6917` scheduling hooks, `4167db7` chart 0.0.23.
+- Reclaimed ~612G on tekau (`/home/pua/{zebra-mainnet-seed,zas_zainos,.local/share/zaino/mainnet}`,
+  `/state`). Root fs 46% used.
+
+## Follow-ups
+- [ ] `mkdir /srv/zebra-state-cache-mainnet` on tekau (trivial host step).
+- [ ] **Plan 2** — `golden-zebra-state` (mainnet) def + values + seed job from `golden-mainnet`.
+- [ ] **Plan 3** — `deploy-ephemeral` state-mode path (`state-mode`/`state-backend` params) + docs.
+- [ ] Validate end-to-end with a zaino ref that actually wires `ZebraReadStateAdapter::open`.
+- [ ] Decide indexer-gRPC :8230 + `backend` selector against that ref.
+- [ ] Optional: cap the root-fs cache (quota/LV) so growth can't threaten k3s.
