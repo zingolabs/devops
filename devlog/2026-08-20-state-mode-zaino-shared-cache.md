@@ -103,9 +103,42 @@ All additive, gated, defaults preserve current render; each verified with `helm 
 - Reclaimed ~612G on tekau (`/home/pua/{zebra-mainnet-seed,zas_zainos,.local/share/zaino/mainnet}`,
   `/state`). Root fs 46% used.
 
+## 2026-08-26 — Plan 2 deployed: golden-zebra-state live on the seeded hostPath
+- Staged straight to devops `main` (ArgoCD reads `main`; user is sole contributor, direct-push OK):
+  seed workflow first → `argo submit seed-zebra-state-cache` → verify → then the app def. Pushed via a
+  throwaway worktree off `origin/main` (cherry-picks `ed4893c` seed, `089dee6` def) to avoid disturbing
+  unrelated WIP in the tree. (SSH-agent died mid-session — push needs `ssh-add`; keys never touched.)
+- **Seed worked cleanly:** `seed-zebra-state-cache` succeeded in ~4 min (copy step 3m for ~260G, local
+  NVMe). hostPath `/srv/zebra-state-cache-mainnet` = **261G**, `state/v28/mainnet`, 17,719 `.sst`, uid 2001.
+  Crash-consistent snapshot of a live `zebra-data-zebra-0`, no quiesce — rocksdb opened it fine.
+- **Zebra opened the seed, not genesis:** `initial disk state version: 28.0.0`,
+  `Opened Zebra state cache at /var/cache/zebrad-cache/state/v28/mainnet`, restored non-finalized backup.
+  App Synced/Healthy, `zebra-0` on tekau, Service **`zebra.golden-zebra-state.svc:8232`** (+8080).
+- **Peer contention (confirms [devops#6], but degraded not dead):** only `handshake_success_total=2`
+  (23 errors — many `ConnectionReset`/`ObsoleteVersion`). Root cause is twofold: shares tekau's egress
+  IP with golden-mainnet (`max_connections_per_ip=1`, remote-enforced) AND tekau's filtered WiFi degrades
+  outbound. Result: cache tracks tip but **holds ~30 blocks (~40 min) behind**, advancing slowly (bounded).
+- **Chart hooks all worked in the wild:** `zebra.volumes.data.hostPath` (PVC omitted), `zebra.nodeSelector`
+  (tekau), zebra-only render (zaino/lwd/zcashd off). Plan 1 validated end-to-end.
+
+### Ensuring a fully-healthy syncing golden-zebra-state (open — user wants this for readstate dev)
+Must stay on tekau (hostPath cache there, shared with state zainos), so it can't escape tekau's IP/network
+by rescheduling. Candidate fixes:
+- **(A) In-cluster peer with golden-mainnet — preferred.** Point golden-zebra-state's `initial_mainnet_peers`
+  at golden-mainnet's zebra P2P (`:8233`), so it syncs blocks *intra-cluster* from the healthy node. Internal
+  source is the pod IP (unique), so `max_connections_per_ip` doesn't bite, and it bypasses the filtered WiFi
+  entirely. Needs a small chart hook to template zebra initial peers; validate zebra will single-peer sync.
+- **(B) Clean distinct egress IP** via a Tailscale exit node / small VPS — fixes per-IP + bad-network at once,
+  but new infra. The "proper" [devops#6] fix.
+- **(C) Periodic re-seed mirror** — no golden-zebra-state sync; a cron re-runs `seed-zebra-state-cache` to snap
+  the cache back to tip. Simple, but static (staleness = interval) and less faithful for readstate dev.
+- **Plan-3 note:** state zainos' RPC fallback (mempool/tx/tip) should target **golden-mainnet's** healthy
+  zebra, reading the cache from golden-zebra-state.
+
 ## Follow-ups
-- [ ] `mkdir /srv/zebra-state-cache-mainnet` on tekau (trivial host step).
-- [ ] **Plan 2** — `golden-zebra-state` (mainnet) def + values + seed job from `golden-mainnet`.
+- [x] `mkdir /srv/zebra-state-cache-mainnet` on tekau — done.
+- [x] **Plan 2** — `golden-zebra-state` + seed — deployed; zebra opened the seed near tip.
+- [ ] **Ensure golden-zebra-state syncs healthily** (option A/B/C above) — needed for faithful readstate dev.
 - [ ] **Plan 3** — `deploy-ephemeral` state-mode path (`state-mode`/`state-backend` params) + docs.
 - [ ] Validate end-to-end with a zaino ref that actually wires `ZebraReadStateAdapter::open`.
 - [ ] Decide indexer-gRPC :8230 + `backend` selector against that ref.
