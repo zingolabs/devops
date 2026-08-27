@@ -52,6 +52,20 @@ spec:
         value: ""
       - name: use-zaino-cache
         value: "false"
+      # State mode: zaino-only, reads the shared golden-zebra-state cache (RO) +
+      # RPC-fallback to a healthy zebra. Requires a zaino ref that opens the cache read-only.
+      - name: state-mode
+        value: "false"
+      - name: state-backend
+        value: "state"
+      - name: state-cache-hostpath
+        value: "/srv/zebra-state-cache-mainnet"
+      # RPC fallback → the SAME zebra whose cache we read (single source of truth,
+      # no cross-node tip skew). Override to zebra.golden-mainnet.svc for a fuller mempool.
+      - name: state-rpc-service
+        value: "zebra.golden-zebra-state.svc"
+      - name: state-rpc-port
+        value: "8232"
       - name: metrics
         value: "true"
       - name: force-build
@@ -109,6 +123,7 @@ spec:
                   value: "{{steps.build-image.outputs.parameters.image}}"
           - name: clone-zebra-snapshot
             template: clone-snapshot
+            when: "'{{workflow.parameters.state-mode}}' != 'true'"
             arguments:
               parameters:
                 - name: source-namespace
@@ -119,7 +134,7 @@ spec:
                   value: "zebra-snapshot"
           - name: clone-zaino-snapshot
             template: clone-snapshot
-            when: "'{{workflow.parameters.use-zaino-cache}}' == 'true'"
+            when: "'{{workflow.parameters.use-zaino-cache}}' == 'true' && '{{workflow.parameters.state-mode}}' != 'true'"
             arguments:
               parameters:
                 - name: source-namespace
@@ -299,16 +314,31 @@ spec:
             ZEBRA_TAG="{{workflow.parameters.zebra-tag}}"
             USE_ZAINO_CACHE="{{workflow.parameters.use-zaino-cache}}"
             BUILT_IMAGE="{{inputs.parameters.image}}"
+            STATE_MODE="{{workflow.parameters.state-mode}}"
 
             git clone --depth 1 https://github.com/zingolabs/zcash-stack.git /tmp/zcash-stack
 
             OVERRIDES=""
-            OVERRIDES="$OVERRIDES --set zebra.volumes.data.dataSource.name=zebra-snapshot"
+            if [ "$STATE_MODE" != "true" ]; then
+              OVERRIDES="$OVERRIDES --set zebra.volumes.data.dataSource.name=zebra-snapshot"
+            fi
 
             if [ "$USE_ZAINO_CACHE" = "true" ]; then
               OVERRIDES="$OVERRIDES --set zaino.volumes.data.dataSource.name=zaino-snapshot"
             else
               OVERRIDES="$OVERRIDES --set-json zaino.volumes.data.dataSource=null"
+            fi
+
+            # State mode: zaino-only; RO-mount the shared golden-zebra cache + RPC-fallback.
+            if [ "$STATE_MODE" = "true" ]; then
+              OVERRIDES="$OVERRIDES --set zebra.enabled=false"
+              OVERRIDES="$OVERRIDES --set zaino.zebraCache.enabled=true"
+              OVERRIDES="$OVERRIDES --set-string zaino.zebraCache.hostPath={{workflow.parameters.state-cache-hostpath}}"
+              OVERRIDES="$OVERRIDES --set-string zaino.config.backend={{workflow.parameters.state-backend}}"
+              OVERRIDES="$OVERRIDES --set-string zaino.config.zebraDbPath=/var/cache/zebrad-cache"
+              OVERRIDES="$OVERRIDES --set-string zaino.nodeSelector.kubernetes\.io/hostname=tekau"
+              OVERRIDES="$OVERRIDES --set-string zaino.rpcService={{workflow.parameters.state-rpc-service}}"
+              OVERRIDES="$OVERRIDES --set-string zaino.rpcPort={{workflow.parameters.state-rpc-port}}"
             fi
 
             # Resolve zaino image: built image takes precedence over zaino-tag
@@ -445,7 +475,12 @@ spec:
             echo "Network:    {{workflow.parameters.network}}"
             echo "Namespace:  {{workflow.parameters.namespace}}"
             echo "Zaino gRPC: zaino.{{workflow.parameters.namespace}}.svc:8137"
-            echo "Zebra RPC:  zebra.{{workflow.parameters.namespace}}.svc:8232"
+            if [ "{{workflow.parameters.state-mode}}" = "true" ]; then
+              echo "Mode:       STATE (reads {{workflow.parameters.state-cache-hostpath}} RO on tekau)"
+              echo "Zebra RPC:  {{workflow.parameters.state-rpc-service}}:{{workflow.parameters.state-rpc-port}} (external fallback)"
+            else
+              echo "Zebra RPC:  zebra.{{workflow.parameters.namespace}}.svc:8232"
+            fi
             if [ "{{workflow.parameters.expose-public}}" = "true" ]; then
               HOST="{{workflow.parameters.public-hostname}}"
               [ -z "$HOST" ] && HOST="{{workflow.parameters.namespace}}"
