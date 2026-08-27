@@ -168,7 +168,20 @@ intra-cluster from golden-mainnet, immune to the WiFi/IP problems. The shared ca
   Rendered zaino config matches the canonical `zainod-bench-mainnet.toml` exactly (backend=direct, zebra_db_path,
   validator_grpc :8230, validator_jsonrpc :8232). Deploy `state2-cd28040`: zaino READY, 0 restarts, gRPC Ready on
   :8137, reading the shared RO cache, tip advancing. **Full pipeline proven end-to-end.**
-- [ ] Optional: `ephemeral_finalised_state` is default (ephemeral) → zaino rebuilds its own chain-index on start
-  (fast, from the local cache). Set it `false` to persist zaino's index for faster restarts (bench-mainnet does).
+  **PROVEN with a real gRPC query (2026-08-27):** `GetLightdInfo` on the state-mode zaino returned live
+  mainnet data — `chainName=main, blockHeight=3462874 (at tip), zcashdSubversion=/Zebra:6.3.0/, upgradeName=NU6.3`.
+  A zaino-only pod, no per-instance zebra, serving a wallet client off the shared RO cache. Stable, 0 restarts.
+- **Third bug (deploy-ephemeral `fix-permissions` step):** it hardcodes
+  `kubectl patch sts zaino ... chown -R 1000:1000 /home/zaino` and runs it AFTER helm — stomping the
+  chart's correct `chown 2001` back to 1000, so the uid-2001 container couldn't open its own LMDB index
+  (`LMDB database error: Permission denied`, PERSISTENT mode). This is why helm's stored manifest said 2001
+  but the live STS said 1000. Fix: **gate `fix-permissions` with `when: state-mode != 'true'`** (the chart's
+  init-perms already chowns to runAsUser=2001 in state mode). Lesson: post-helm imperative patches in the
+  workflow silently override chart values — check them when a live resource disagrees with `helm get manifest`.
+- [ ] Optional: `ephemeral_finalised_state` — zaino still builds its own chain-index (`fs_mode=ephemeral(syncing)`,
+  fast from the local cache) before fully-historical queries; tip queries work immediately. Set `false` to persist
+  the index across restarts (bench-mainnet does); `true` for lightest disposable instances.
+- [ ] Optional: clean redeploy (fresh ns) to confirm the fixed pipeline needs no manual patch (the hand-patch
+  reproduced exactly what the gated workflow now does, so it's validated, but a from-scratch run is the final tick).
 - [ ] Decide indexer-gRPC :8230 + `backend` selector against that ref.
 - [ ] Optional: cap the root-fs cache (quota/LV) so growth can't threaten k3s.
