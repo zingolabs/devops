@@ -57,7 +57,7 @@ spec:
       - name: state-mode
         value: "false"
       - name: state-backend
-        value: "state"
+        value: "direct"
       - name: state-cache-hostpath
         value: "/srv/zebra-state-cache-mainnet"
       # RPC fallback → the SAME zebra whose cache we read (single source of truth,
@@ -332,6 +332,8 @@ spec:
             # State mode: zaino-only; RO-mount the shared golden-zebra cache + RPC-fallback.
             if [ "$STATE_MODE" = "true" ]; then
               OVERRIDES="$OVERRIDES --set zebra.enabled=false"
+              # Run zaino as uid 2001 so it can read Zebra's 0600 cache files (RO share).
+              OVERRIDES="$OVERRIDES --set zaino.applyRunAsUser=true --set zaino.runAsUser=2001 --set zaino.runAsGroup=2001"
               OVERRIDES="$OVERRIDES --set zaino.zebraCache.enabled=true"
               OVERRIDES="$OVERRIDES --set-string zaino.zebraCache.hostPath={{workflow.parameters.state-cache-hostpath}}"
               OVERRIDES="$OVERRIDES --set-string zaino.config.backend={{workflow.parameters.state-backend}}"

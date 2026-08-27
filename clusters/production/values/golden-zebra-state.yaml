@@ -22,6 +22,8 @@ zebra:
   # WiFi + the shared-egress-IP per-peer limit).
   initialPeers:
     - zebra.golden-mainnet.svc:8233
+  # Serve the indexer gRPC (:8230) that state-mode zaino readers' syncer connects to.
+  indexer: true
   requests:
     cpu: 2
     memory: 4Gi
