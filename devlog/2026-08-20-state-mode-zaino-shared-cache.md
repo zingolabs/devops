@@ -135,10 +135,18 @@ by rescheduling. Candidate fixes:
 - **Plan-3 note:** state zainos' RPC fallback (mempool/tx/tip) should target **golden-mainnet's** healthy
   zebra, reading the cache from golden-zebra-state.
 
+**RESOLVED (2026-08-27) — option A shipped and works.** Chart **0.0.24** added two gated hooks:
+`zebra.initialPeers` (renders `initial_mainnet_peers` in zebrad.toml) and `zebra.service.p2p` (exposes
+8233 on the Service). golden-mainnet values set `service.p2p: true`; golden-zebra-state values set
+`initialPeers: ["zebra.golden-mainnet.svc:8233"]`. After a STS restart (configmap change doesn't
+auto-reload), golden-zebra-state logs **`finished initial sync to chain tip, using gossiped blocks
+sync_percent=100.000% remaining_sync_blocks=0`** and tracks new blocks in real time — syncing
+intra-cluster from golden-mainnet, immune to the WiFi/IP problems. The shared cache is now live at tip.
+
 ## Follow-ups
 - [x] `mkdir /srv/zebra-state-cache-mainnet` on tekau — done.
 - [x] **Plan 2** — `golden-zebra-state` + seed — deployed; zebra opened the seed near tip.
-- [ ] **Ensure golden-zebra-state syncs healthily** (option A/B/C above) — needed for faithful readstate dev.
+- [x] **Ensure golden-zebra-state syncs healthily** — done via option A (in-cluster peer, chart 0.0.24); at tip.
 - [ ] **Plan 3** — `deploy-ephemeral` state-mode path (`state-mode`/`state-backend` params) + docs.
 - [ ] Validate end-to-end with a zaino ref that actually wires `ZebraReadStateAdapter::open`.
 - [ ] Decide indexer-gRPC :8230 + `backend` selector against that ref.
