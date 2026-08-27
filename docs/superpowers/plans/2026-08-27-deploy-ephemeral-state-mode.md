@@ -12,7 +12,7 @@
 
 ## Design decisions (baked in)
 - **Cache source:** `golden-zebra-state`'s hostPath `/srv/zebra-state-cache-mainnet` (RO). Zaino pinned to `tekau` (nodeSelector) since the hostPath lives there.
-- **RPC fallback target:** `golden-mainnet`'s zebra (`zebra.golden-mainnet.svc:8232`) — canonical healthy node with the richest mempool. Overridable via a param (e.g. to `zebra.golden-zebra-state.svc` for self-consistency).
+- **RPC fallback target:** the **same** zebra whose cache we read — `zebra.golden-zebra-state.svc:8232` — so the read-state cache and the RPC tip/mempool are one source of truth (no cross-node skew). Overridable to `zebra.golden-mainnet.svc` when a fuller mempool matters.
 - **Ref-agnostic:** `state-backend` (default `state`) sets zaino's `backend`; the deployed zaino ref must wire the read-only-open path. State mode is orthogonal to `ref`/`zaino-tag`.
 
 ## File Structure
@@ -259,7 +259,7 @@ In `.claude/deploy-ephemeral-reference.md`, in the "All parameters" table, add r
 | `state-mode` | `false` | Zaino-only: RO-mount the shared golden-zebra-state cache + RPC-fallback; no per-instance zebra |
 | `state-backend` | `state` | Zaino `backend` selector for state mode (ref must wire read-only-open) |
 | `state-cache-hostpath` | `/srv/zebra-state-cache-mainnet` | hostPath (tekau) of the shared cache to RO-mount |
-| `state-rpc-service` | `zebra.golden-mainnet.svc` | Zebra RPC endpoint for mempool/tip/tx-submit fallback |
+| `state-rpc-service` | `zebra.golden-zebra-state.svc` | Zebra RPC endpoint for mempool/tip/tx-submit fallback (same node as the cache) |
 | `state-rpc-port` | `8232` | Port for the RPC fallback |
 ```
 And add a recipe under "Common recipes":
