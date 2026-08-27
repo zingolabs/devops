@@ -151,6 +151,9 @@ spec:
                   value: "{{steps.build-image.outputs.parameters.image}}"
         - - name: fix-permissions
             template: fix-permissions
+            # Skip in state mode: this hardcodes chown 1000, but state-mode zaino runs
+            # as uid 2001 (the chart's init-perms already chowns correctly). See devlog.
+            when: "'{{workflow.parameters.state-mode}}' != 'true'"
         - - name: expose-public
             template: expose-public
             when: "'{{workflow.parameters.expose-public}}' == 'true'"
