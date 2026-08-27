@@ -147,7 +147,14 @@ intra-cluster from golden-mainnet, immune to the WiFi/IP problems. The shared ca
 - [x] `mkdir /srv/zebra-state-cache-mainnet` on tekau — done.
 - [x] **Plan 2** — `golden-zebra-state` + seed — deployed; zebra opened the seed near tip.
 - [x] **Ensure golden-zebra-state syncs healthily** — done via option A (in-cluster peer, chart 0.0.24); at tip.
-- [ ] **Plan 3** — `deploy-ephemeral` state-mode path (`state-mode`/`state-backend` params) + docs.
-- [ ] Validate end-to-end with a zaino ref that actually wires `ZebraReadStateAdapter::open`.
+- [x] **Plan 3** — `deploy-ephemeral` state-mode path shipped (chart 0.0.24). New params `state-mode`,
+  `state-backend` (default `state`), `state-cache-hostpath`, `state-rpc-service`
+  (default **`zebra.golden-zebra-state.svc`** — same node as the cache, single source of truth, no skew),
+  `state-rpc-port`. `state-mode=true` → skips snapshot cloning, `zebra.enabled=false`, RO-mounts the shared
+  cache, pins zaino to tekau, sets `backend`/`zebra_db_path`, RPC-falls-back to the read zebra. Render
+  verified (0 zebra STS, RO zebra-cache, backend=state, self-RPC). Docs updated (reference + /deploy).
+- [ ] **End-to-end validation** — needs a zaino ref that actually wires `ZebraReadStateAdapter::open`
+  (the ref-agnostic seam). Also: if that ref's non-state fallback uses the indexer gRPC :8230 (not JSON-RPC
+  8232), expose 8230 on golden-zebra-state (§7.2) — the config renders an :8230 line that's currently unserved.
 - [ ] Decide indexer-gRPC :8230 + `backend` selector against that ref.
 - [ ] Optional: cap the root-fs cache (quota/LV) so growth can't threaten k3s.
