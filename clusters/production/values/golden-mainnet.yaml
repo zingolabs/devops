@@ -18,6 +18,9 @@ zebra:
     memory: 4Gi
   limits:
     memory: 24Gi
+  service:
+    # Expose zebra P2P (8233) in-cluster so golden-zebra-state can peer with it.
+    p2p: true
 
 zaino:
   enabled: true

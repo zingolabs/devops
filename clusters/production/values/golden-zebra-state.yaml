@@ -18,6 +18,10 @@ zebra:
   # Plan-1 chart hook: pin to the storage node.
   nodeSelector:
     kubernetes.io/hostname: tekau
+  # Sync in-cluster from the healthy golden-mainnet zebra (dodges tekau's degraded
+  # WiFi + the shared-egress-IP per-peer limit).
+  initialPeers:
+    - zebra.golden-mainnet.svc:8233
   requests:
     cpu: 2
     memory: 4Gi
