@@ -153,8 +153,22 @@ intra-cluster from golden-mainnet, immune to the WiFi/IP problems. The shared ca
   `state-rpc-port`. `state-mode=true` → skips snapshot cloning, `zebra.enabled=false`, RO-mounts the shared
   cache, pins zaino to tekau, sets `backend`/`zebra_db_path`, RPC-falls-back to the read zebra. Render
   verified (0 zebra STS, RO zebra-cache, backend=state, self-RPC). Docs updated (reference + /deploy).
-- [ ] **End-to-end validation** — needs a zaino ref that actually wires `ZebraReadStateAdapter::open`
-  (the ref-agnostic seam). Also: if that ref's non-state fallback uses the indexer gRPC :8230 (not JSON-RPC
-  8232), expose 8230 on golden-zebra-state (§7.2) — the config renders an :8230 line that's currently unserved.
+- [x] **End-to-end VALIDATED (2026-08-27) with zaino 0.9.0-rc.1, `backend=direct`.** Correcting an earlier
+  wrong conclusion: the shipping `direct`/`state` backend DOES open Zebra's finalized cache **read-only** —
+  `init_read_state_with_syncer` → `spawn_init_read_only` → RocksDB **secondary** mode (`open_cf_descriptors_as_secondary`),
+  live-follows the primary, writes only a per-pod scratch tempdir; `delete_old_database:true` is a no-op in RO.
+  So the shared-RO-cache design is correct and needs no zaino change. (My first trace stopped at the zaino layer;
+  the truth is in the zebra-state dep. User's instinct was right.)
+  Two operational fixes made it run (chart **0.0.25**):
+  1. **uid mismatch** — Zebra writes the cache 0600 as uid 2001; zaino ran as a different uid → `PermissionDenied`
+     reading the DB version file. Fix: `zaino.applyRunAsUser` → run zaino container as uid **2001**.
+  2. **indexer gRPC** — the tip syncer connects to Zebra's indexer gRPC (`validator_grpc_listen_address`), NOT
+     JSON-RPC. Fix: `zebra.indexer` → `indexer_listen_addr = 0.0.0.0:8230` + expose the port. Stock `zfnd/zebra:6.3.0`
+     serves it via config (the `indexer` cargo feature does NOT gate the gRPC server in 6.x) — no custom image.
+  Rendered zaino config matches the canonical `zainod-bench-mainnet.toml` exactly (backend=direct, zebra_db_path,
+  validator_grpc :8230, validator_jsonrpc :8232). Deploy `state2-cd28040`: zaino READY, 0 restarts, gRPC Ready on
+  :8137, reading the shared RO cache, tip advancing. **Full pipeline proven end-to-end.**
+- [ ] Optional: `ephemeral_finalised_state` is default (ephemeral) → zaino rebuilds its own chain-index on start
+  (fast, from the local cache). Set it `false` to persist zaino's index for faster restarts (bench-mainnet does).
 - [ ] Decide indexer-gRPC :8230 + `backend` selector against that ref.
 - [ ] Optional: cap the root-fs cache (quota/LV) so growth can't threaten k3s.
