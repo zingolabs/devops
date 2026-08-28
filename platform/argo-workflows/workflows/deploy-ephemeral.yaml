@@ -66,6 +66,13 @@ spec:
         value: "zebra.golden-zebra-state.svc"
       - name: state-rpc-port
         value: "8232"
+      # RUST_LOG for state-mode zainos. Default `trace` (GLOBAL, not `zaino=trace`
+      # — that matches at :: boundaries and misses zaino_state/zaino_mempool_service,
+      # i.e. captures nothing sub-INFO). Global trace captures the diagnostics
+      # (FreezeReason, sync internals); Grafana filters trace when unwanted.
+      # Keep comma-free for helm --set.
+      - name: state-log-level
+        value: "trace"
       - name: metrics
         value: "true"
       - name: force-build
@@ -344,6 +351,7 @@ spec:
               OVERRIDES="$OVERRIDES --set-string zaino.nodeSelector.kubernetes\.io/hostname=tekau"
               OVERRIDES="$OVERRIDES --set-string zaino.rpcService={{workflow.parameters.state-rpc-service}}"
               OVERRIDES="$OVERRIDES --set-string zaino.rpcPort={{workflow.parameters.state-rpc-port}}"
+              OVERRIDES="$OVERRIDES --set-string zaino.logging.level={{workflow.parameters.state-log-level}}"
             fi
 
             # Resolve zaino image: built image takes precedence over zaino-tag
