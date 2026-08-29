@@ -1,0 +1,12 @@
+# Cluster facts for tooling run against tekau. Public by design — no credential here.
+# Consumption (`ztest cluster add --extra-config <raw url>`): platform/zot/README.md
+
+[ztest]
+class = "remote"
+
+# platform/zot; pull uses the same address (builder = pod, nothing pushes from a workstation)
+push = "zot.vaquita-altair.ts.net/ztest"
+
+storage_class = "topolvm-thin"
+# explicit: ztest takes the first driver match, which is topolvm-snapshot (Retain) → LV leak per run
+snapshot_class = "ztest-snapshot"

@@ -3,3 +3,6 @@
 
 # Claude Code session worktrees
 .claude/worktrees/
+
+# kustomize --enable-helm chart cache
+charts/
