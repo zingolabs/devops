@@ -1,0 +1,73 @@
+# ztest build registry, unauthenticated by design (tailnet ACL = the only boundary). README.md
+
+service:
+  type: ClusterIP
+
+# NEVER add tailscale.com/funnel — that puts an anonymous-write registry on the open internet
+ingress:
+  enabled: true
+  className: tailscale
+  pathtype: Prefix
+  hosts:
+    - host: zot
+      paths:
+        - path: /
+  tls:
+    - hosts:
+        - zot
+
+persistence: true
+pvc:
+  # thin-pool backed → ceiling, not reservation (10 runner images @ ~1 GiB dominate)
+  storage: 50Gi
+  storageClassName: topolvm-thin
+
+mountConfig: true
+configFiles:
+  config.json: |-
+    {
+      "storage": {
+        "rootDirectory": "/var/lib/registry",
+        "dedupe": true,
+        "gc": true,
+        "gcDelay": "1h",
+        "gcInterval": "6h",
+        "retention": {
+          "dryRun": false,
+          "delay": "24h",
+          "policies": [
+            {
+              "repositories": ["**/ztest-runner", "ztest-runner"],
+              "deleteUntagged": true,
+              "deleteReferrers": true,
+              "keepTags": [
+                { "patterns": ["dev-.*"], "mostRecentlyPushedCount": 10 }
+              ]
+            },
+            {
+              "repositories": ["**"],
+              "deleteUntagged": true,
+              "deleteReferrers": true,
+              "keepTags": [
+                { "patterns": ["dev-.*"], "pulledWithin": "720h" },
+                { "patterns": ["dev-.*"], "mostRecentlyPushedCount": 5 }
+              ]
+            }
+          ]
+        }
+      },
+      "http": {
+        "address": "0.0.0.0",
+        "port": "5000",
+        "readTimeout": "600s",
+        "writeTimeout": "600s"
+      },
+      "log": { "level": "info" }
+    }
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi

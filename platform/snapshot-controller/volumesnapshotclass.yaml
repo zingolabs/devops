@@ -1,4 +1,4 @@
-# VolumeSnapshotClass for TopoLVM CSI driver
+# Retain — golden chain fixtures (content = the artifact)
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
 metadata:
@@ -7,3 +7,11 @@ metadata:
     snapshot.storage.kubernetes.io/is-default-class: "true"
 driver: topolvm.io
 deletionPolicy: Retain
+---
+# Delete — ztest drops its snapshot per run (Retain → one orphaned thin-pool LV each)
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: ztest-snapshot
+driver: topolvm.io
+deletionPolicy: Delete
