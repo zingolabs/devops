@@ -4,8 +4,8 @@
 [ztest]
 class = "remote"
 
-# platform/zot; pull uses the same address (builder = pod, nothing pushes from a workstation)
-push = "zot.vaquita-altair.ts.net/ztest"
+# platform/zot, in-cluster address w/ http:// to label no-tls
+push = "http://zot.zot.svc.cluster.local:5000/ztest"
 
 storage_class = "topolvm-thin"
 # explicit: ztest takes the first driver match, which is topolvm-snapshot (Retain) → LV leak per run

@@ -1,7 +1,18 @@
+---
+# ztest build registry.
+#
+# - one ref everywhere: zot.zot.svc.cluster.local:5000/ztest (ts.net name = humans only)
+# - pods reach it by cluster DNS; containerd by NodePort 30500 on loopback (nodes have no cluster DNS)
+# - loopback-bound by nodeport-addresses, machines/modules/k3s-registries.nix
+# - http:// — TLS ends at the tailscale ingress, never at zot
+# - local-path, not topolvm — contents reproducible, snapshots pointless
+# - advertised per KEP-1755 in kube-public/local-registry-hosting
+# - no top-level `namespace:` (rewrites that ConfigMap out of kube-public; chart pins its own)
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: zot
+resources:
+  - local-registry-hosting.yaml
 
 helmCharts:
   - name: zot

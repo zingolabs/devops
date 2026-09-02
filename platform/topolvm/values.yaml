@@ -20,7 +20,8 @@ lvmd:
 storageClasses:
   - name: topolvm-thin
     storageClass:
-      isDefaultClass: true
+      # opt-in — k3s already ships local-path as default, and two defaults = newest wins
+      isDefaultClass: false
       volumeBindingMode: WaitForFirstConsumer
       allowVolumeExpansion: true
       additionalParameters:
