@@ -1,7 +1,7 @@
 # ztest-ci — CI's grip on the cluster
 
 GitHub Actions runs zaino's live suite on `ubuntu-latest`, joins the tailnet as
-`tag:ci`, and reaches the API server through the operator's proxy. **No kube
+`tag:ztest-runner`, and reaches the API server through the operator's proxy. **No kube
 credential is minted or stored in GitHub** — the runner authenticates as its
 tailnet identity, and the tailnet grant maps that identity to the Kubernetes
 group `ztest-ci`:
@@ -41,7 +41,7 @@ parallel CI role here would guarantee that drift.
 
 ## Verifying
 
-From a runner (or any `tag:ci` machine):
+From a runner (or any `tag:ztest-runner` machine):
 
 ```bash
 tailscale configure kubeconfig tailscale-operator
