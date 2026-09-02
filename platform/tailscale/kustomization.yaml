@@ -15,3 +15,10 @@ helmCharts:
     valuesInline:
       # OAuth credentials from pre-created secret 'operator-oauth'
       # with keys: client_id, client_secret
+
+      # API-server proxy: CI reaches k8s as its tailnet identity, so no kube token
+      # is ever minted or stored in GitHub. Grant lives in machines/tailscale/policy.hujson
+      # ("tailscale.com/cap/kubernetes" -> impersonate group ztest-ci); the group is
+      # bound to ztest's own run role by platform/ztest-ci.
+      apiServerProxyConfig:
+        mode: "true"

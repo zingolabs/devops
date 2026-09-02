@@ -1,0 +1,3 @@
+name: ztest-ci
+namespace: default
+sourcePath: platform/ztest-ci

@@ -1,0 +1,13 @@
+---
+# KEP-1755. Three fields = three viewpoints, and here they differ.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: local-registry-hosting
+  namespace: kube-public
+data:
+  localRegistryHosting.v1: |
+    host: "zot.vaquita-altair.ts.net/ztest"
+    hostFromClusterNetwork: "zot.zot.svc.cluster.local:5000/ztest"
+    hostFromContainerRuntime: "zot.zot.svc.cluster.local:5000/ztest"
+    help: "https://github.com/zingolabs/devops/blob/main/platform/zot/README.md"

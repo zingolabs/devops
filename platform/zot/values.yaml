@@ -1,7 +1,8 @@
 # ztest build registry, unauthenticated by design (tailnet ACL = the only boundary). README.md
 
 service:
-  type: ClusterIP
+  type: NodePort
+  nodePort: 30500
 
 # NEVER add tailscale.com/funnel — that puts an anonymous-write registry on the open internet
 ingress:
@@ -18,9 +19,9 @@ ingress:
 
 persistence: true
 pvc:
-  # thin-pool backed → ceiling, not reservation (10 runner images @ ~1 GiB dominate)
+  # no expansion on local-path — a full registry = shrink the images, not the disk
   storage: 50Gi
-  storageClassName: topolvm-thin
+  storageClassName: local-path
 
 mountConfig: true
 configFiles:
