@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ztest-ci-preflight
+rules:
+  # `ztest cluster check` reads ztest-remote's `ztest.io/rules-hash` annotation to tell a
+  # current role from a stale one. Scoped to that single object by name: no list, no watch,
+  # no other role, and nothing the run itself uses.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    resourceNames: ["ztest-remote"]
+    verbs: ["get"]

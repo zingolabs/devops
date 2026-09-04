@@ -3,3 +3,5 @@ kind: Kustomization
 
 resources:
   - clusterrolebinding.yaml
+  - preflight-clusterrole.yaml
+  - preflight-clusterrolebinding.yaml

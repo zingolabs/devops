@@ -28,6 +28,20 @@ per-run namespaces are the run identity's job.
 Reusing it means CI's grip cannot drift from what a run actually needs. Writing a
 parallel CI role here would guarantee that drift.
 
+## Why the preflight role is separate
+
+`ztest-ci-preflight` grants exactly one thing `ztest-remote` deliberately never will: `get` on
+the `ztest-remote` ClusterRole itself, by name. `ztest cluster check` reads that object's
+`ztest.io/rules-hash` annotation to tell a current role from a stale one, and a caller holding
+only `ztest-remote` gets a 403 doing so.
+
+This is not the parallel CI role warned against above. That warning is about restating *run*
+permissions here, where they would drift from ztest's list; this grants nothing a run uses.
+The alternative — adding policy read to `ztest-remote` — would weaken the run identity's stated
+posture ("no rbac-write, no policy-write, no secrets read") for every run identity on every
+cluster, to satisfy one preflight. `resourceNames` keeps it to the single object: no `list`,
+no `watch`, no other role.
+
 ## Ordering
 
 `ztest cluster setup` creates the ClusterRole; ArgoCD only *references* it. So:
