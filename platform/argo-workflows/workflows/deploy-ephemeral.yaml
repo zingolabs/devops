@@ -141,7 +141,9 @@ spec:
                   value: "zebra-snapshot"
           - name: clone-zaino-snapshot
             template: clone-snapshot
-            when: "'{{workflow.parameters.use-zaino-cache}}' == 'true' && '{{workflow.parameters.state-mode}}' != 'true'"
+            # Also in state mode: restores zaino's own finalised index so it doesn't
+            # rebuild from genesis (the chart's init-perms re-chowns it to uid 2001).
+            when: "'{{workflow.parameters.use-zaino-cache}}' == 'true'"
             arguments:
               parameters:
                 - name: source-namespace

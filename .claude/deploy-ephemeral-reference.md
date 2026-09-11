@@ -53,11 +53,12 @@ Rules:
 | `zebra-snapshot` | (auto from golden) | Override zebra snapshot name |
 | `zaino-snapshot` | (auto from golden) | Override zaino snapshot name |
 | `use-zaino-cache` | `false` | Restore zaino DB from golden snapshot |
-| `state-mode` | `false` | Zaino-only: RO-mount the shared golden-zebra-state cache + RPC-fallback; no per-instance zebra, no cloning |
-| `state-backend` | `state` | Zaino `backend` selector for state mode (ref must wire read-only-open) |
+| `state-mode` | `false` | Zaino-only: RO-mount the shared golden-zebra-state cache + RPC-fallback; no per-instance zebra, no zebra cloning. Combine with `use-zaino-cache=true` to restore zaino's own finalised index (otherwise persistent mode rebuilds it from genesis in the background) |
+| `state-backend` | `direct` | Zaino `backend` selector for state mode (opens the zebra cache read-only) |
 | `state-cache-hostpath` | `/srv/zebra-state-cache-mainnet` | hostPath (tekau) of the shared cache to RO-mount |
 | `state-rpc-service` | `zebra.golden-zebra-state.svc` | Zebra RPC endpoint for mempool/tip/tx fallback (same node as the cache = no skew) |
 | `state-rpc-port` | `8232` | Port for the RPC fallback |
+| `state-log-level` | `trace` | `RUST_LOG` for state-mode zainos (global trace; filter in Grafana). Must be comma-free (helm `--set`) |
 | `metrics` | `true` | Enable metrics port; set `false` for old refs without prometheus |
 | `force-build` | `false` | Rebuild image even if it exists |
 | `release-name` | `zaino` | Helm release name |
@@ -97,10 +98,12 @@ argo submit --from workflowtemplate/deploy-ephemeral -n argo \
 # State-mode: zaino-only against the shared live golden-zebra-state cache
 # (no per-instance zebra; RO-mounts /srv/zebra-state-cache-mainnet on tekau;
 #  RPC-falls-back to zebra.golden-zebra-state.svc). Needs a read-state-capable zaino ref.
+# use-zaino-cache restores zaino's finalised index from golden instead of
+# rebuilding it from genesis (golden zaino's DB must match the ref's DB version).
 argo submit --from workflowtemplate/deploy-ephemeral -n argo \
   -p namespace=state-<shorthash> \
   -p ref=<full-40-char-hash-of-a-readstate-capable-zaino> \
-  -p state-mode=true
+  -p state-mode=true -p use-zaino-cache=true
 ```
 
 ## Monitoring & cleanup

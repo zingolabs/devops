@@ -45,7 +45,7 @@ Rules: always include short commit hash, no `v` prefix, DNS-1123 (lowercase + hy
    - `-p zaino-env=ZAINO_EPHEMERAL_FINALISED_STATE=true` — if user wants wallet-ready immediately (no full sync needed)
    - `-p expose-public=true -p tailscale=true` — if user wants external access
    - `-p use-zaino-cache=true` — if user wants to start from a cached zaino DB
-   - `-p state-mode=true` — zaino-only reading the shared live `golden-zebra-state` cache (RO hostPath on tekau) + RPC-fallback to `zebra.golden-zebra-state.svc`; no per-instance zebra. Requires a zaino ref that opens the cache read-only (`backend=state`). Override `-p state-rpc-service=zebra.golden-mainnet.svc` for a fuller mempool.
+   - `-p state-mode=true` — zaino-only reading the shared live `golden-zebra-state` cache (RO hostPath on tekau) + RPC-fallback to `zebra.golden-zebra-state.svc`; no per-instance zebra. Requires a zaino ref that opens the cache read-only (`backend=direct`, the default `state-backend`). Add `-p use-zaino-cache=true` to restore zaino's own finalised index from the golden snapshot; without it, persistent mode rebuilds the index from genesis in the background. Override `-p state-rpc-service=zebra.golden-mainnet.svc` for a fuller mempool.
    - `-p metrics=false` — for older refs without prometheus support
    - `-p network=testnet` — for testnet deploys
 
