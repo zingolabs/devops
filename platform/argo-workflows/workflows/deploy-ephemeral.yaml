@@ -179,14 +179,28 @@ spec:
             set -e
             GOLDEN_NS="golden-{{workflow.parameters.network}}"
 
+            # Newest snapshot matching a name prefix: prefer the `latest` label
+            # (rotated by snapshot-golden), else newest by creationTimestamp. The API
+            # lists by name, so a bare `tail -1` picks the alphabetically-last suffix.
+            latest_snap() {
+              SNAP=$(kubectl get volumesnapshot -n "$GOLDEN_NS" -l zcash-stack/latest=true \
+                --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[*].metadata.name}' \
+                | tr ' ' '\n' | grep "$1" | tail -1)
+              if [ -z "$SNAP" ]; then
+                SNAP=$(kubectl get volumesnapshot -n "$GOLDEN_NS" \
+                  --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[*].metadata.name}' \
+                  | tr ' ' '\n' | grep "$1" | tail -1)
+              fi
+              echo "$SNAP"
+            }
+
             # Use override if provided, otherwise auto-resolve latest
             ZEBRA_OVERRIDE="{{workflow.parameters.zebra-snapshot}}"
             if [ -n "$ZEBRA_OVERRIDE" ]; then
               ZEBRA_SNAP="$ZEBRA_OVERRIDE"
               echo "Using override zebra snapshot: $ZEBRA_SNAP"
             else
-              ZEBRA_SNAP=$(kubectl get volumesnapshot -n "$GOLDEN_NS" \
-                -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep '^zebra-' | tail -1)
+              ZEBRA_SNAP=$(latest_snap '^zebra-')
               echo "Auto-resolved zebra snapshot: $ZEBRA_SNAP"
             fi
             echo -n "$ZEBRA_SNAP" > /tmp/zebra-snapshot
@@ -196,8 +210,7 @@ spec:
               ZAINO_SNAP="$ZAINO_OVERRIDE"
               echo "Using override zaino snapshot: $ZAINO_SNAP"
             else
-              ZAINO_SNAP=$(kubectl get volumesnapshot -n "$GOLDEN_NS" \
-                -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep '^data-zaino-' | tail -1)
+              ZAINO_SNAP=$(latest_snap '^data-zaino-')
               echo "Auto-resolved zaino snapshot: $ZAINO_SNAP"
             fi
             echo -n "$ZAINO_SNAP" > /tmp/zaino-snapshot
