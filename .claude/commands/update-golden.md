@@ -122,7 +122,10 @@ New ephemeral deploys will auto-resolve these fresh snapshots.
 
 | Zaino | Zebra | Status | Notes |
 |-------|-------|--------|-------|
-| 0.4.1-no-tls | 5.1.0 | PRODUCTION | Current golden (2026-06) |
+| 0.9.0-no-tls | 6.3.0 | PRODUCTION | Current golden (2026-09-11). In-place from 0.6.0: DB stays v1.3, no migration, config unchanged. gRPC down until startup validation finishes (~6 min mainnet, ~8 min testnet) |
+| 0.10.0-rc.1 | 6.3.0 | WORKS | State-mode ephemeral restored from golden 0.6.0 zaino snapshot (2026-09-11). Requires `dbSize` > restored DB (~116 GiB) or MDB_MAP_FULL → in-process restart loop |
+| 0.6.0-no-tls | 6.3.0 | WORKS | Golden 2026-07 → 2026-09-11 |
+| 0.4.1-no-tls | 5.1.0 | WORKS | Golden 2026-06 |
 | 0.4.1-no-tls | 5.2.0 | BROKEN | Parse error: invalid consensus branch id |
 | 0.5.0-rc.6 | 5.2.0 | WORKS | Tested ephemeral (2026-07-01) |
 | 0.5.0-rc.7 | 5.2.0 | WORKS | Tested ephemeral (2026-07-02) |
