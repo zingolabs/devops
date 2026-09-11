@@ -89,7 +89,9 @@ data:
         ZAINO_METRICS_ENDPOINT: "0.0.0.0:9998"
         OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.monitoring.svc:4317"
       config:
-        dbSize: 96
+        # LMDB map size in GiB. Must exceed the restored golden DB (~116 GiB) or
+        # every catch-up write fails with MDB_MAP_FULL; matches golden-mainnet.
+        dbSize: 160
       logging:
         format: json
         color: "false"
