@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Test wallet fixtures: namespace + working PVCs + the sealed wallet creds.
+# Sealed files are produced by scripts/seal-wallet-fixtures.sh (mnemonics come
+# from the environment, never from the repo).
+resources:
+  - namespace.yaml
+  - sealed-wallet-a.yaml
+  - sealed-wallet-b.yaml

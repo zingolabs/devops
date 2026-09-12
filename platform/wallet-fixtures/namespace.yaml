@@ -1,0 +1,38 @@
+# Test wallet fixtures used by wallet-sync and payment workflows.
+#
+# The namespace is fixed (not per-rc) so the wallets and their SealedSecrets
+# outlive ephemeral rc namespaces; wallet Jobs run here and reach the zaino
+# under test over cross-namespace DNS (zaino.<rc-namespace>.svc.cluster.local).
+#
+# The PVCs are optional working storage: a wallet can always be rebuilt from its
+# SealedSecret (mnemonic + birthday), but keeping the wallet DB makes repeat
+# syncs incremental. topolvm-thin binds on first use, so wallet Jobs must be
+# pinned to the same node (arbei).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wallet-fixtures
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wallet-a
+  namespace: wallet-fixtures
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: topolvm-thin
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wallet-b
+  namespace: wallet-fixtures
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: topolvm-thin
+  resources:
+    requests:
+      storage: 2Gi
