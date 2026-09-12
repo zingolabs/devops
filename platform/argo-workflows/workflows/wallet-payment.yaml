@@ -80,7 +80,10 @@ spec:
           - name: job-suffix
       resource:
         action: create
-        setOwnerReference: true
+        # MUST stay false: the Job runs in wallet-fixtures while the Workflow
+        # lives in argo, and Kubernetes rejects cross-namespace ownerRefs — the
+        # GC deletes the Job seconds after creation (OwnerRefInvalidNamespace).
+        setOwnerReference: false
         successCondition: status.succeeded > 0
         failureCondition: status.failed > 0
         manifest: |
@@ -94,6 +97,9 @@ spec:
           spec:
             backoffLimit: 0
             activeDeadlineSeconds: 3600
+            # No ownerRef means no cascade delete, and generateName makes a new
+            # Job per run, so they clean themselves up a day after finishing.
+            ttlSecondsAfterFinished: 86400
             template:
               metadata:
                 labels:
