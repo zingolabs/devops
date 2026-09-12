@@ -1,0 +1,211 @@
+# Wallet payment check: two real mainnet wallets pay each other through the
+# zaino under test, proving the full client path — sync, note selection,
+# proving, transaction submission, propagation and observation.
+#
+# Self-contained: it targets any zaino by service DNS, so it works against an
+# ephemeral rc namespace, a golden deploy, or anything else serving the
+# lightwalletd interface. Wiring it to the rc gate is a separate step.
+#
+# Wallets come from SealedSecrets in the wallet-fixtures namespace (mnemonic +
+# birthday), so no wallet state is required up front; the PVCs only keep the
+# wallet DB warm between runs.
+#
+# Usage:
+#   argo submit --from workflowtemplate/wallet-payment -n argo \
+#     -p zaino-service=zaino.rc1-state-c9d25de.svc.cluster.local
+#
+# Timing: each devtool sync costs ~7.5 min against mainnet regardless of how
+# little there is to scan, because GetSubtreeRoots re-streams every run. A round
+# trip is therefore ~25-30 min — suitable for a nightly or on-demand check, not
+# a per-commit gate. The target zaino MUST have `[service] timeout` raised well
+# above the default 30 (which caps any stream at 120s) or every sync dies; see
+# zingolabs/zaino#1537.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: wallet-payment
+  namespace: argo
+spec:
+  entrypoint: round-trip
+  # snapshot-workflow is the SA whose ClusterRoleBinding grants batch/jobs
+  # create+watch cluster-wide, which the `resource: create` step below needs in
+  # the wallet-fixtures namespace.
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: zaino-service
+        value: "zaino.rc1-state-c9d25de.svc.cluster.local"
+      - name: zaino-port
+        value: "8137"
+      # Amount per hop, in zatoshis. The ZIP-317 fee (10000 zat for a simple
+      # shielded spend) is paid on top and asserted separately.
+      - name: amount-zat
+        value: "20000"
+      - name: wallet-image
+        value: "zot.zot.svc.cluster.local:5000/wallet/zcash-devtool:5a26ee85"
+      - name: wallet-namespace
+        value: "wallet-fixtures"
+      # Unified addresses of the fixtures. Public values; the spending keys stay
+      # in the SealedSecrets.
+      - name: address-a
+        value: "u1ykhfwlw78z03253yr8clnx5sn3zvwxe2xa6squnl4shhv6ltycpxufjgjxercynhvvl7kw8svxvcl88ez3r4xnnungp5g4zurf2cn8zrasst982z59v3n6x4kvlex0fcqesngwegrjgv8q8ptrllk82cexzlzmgc52a2fcu3vspxe43l9skw0xp7tjdatvsk0f02uds4d6qxyxc6xzw"
+      - name: address-b
+        value: "u1dpetsjjzapclg50e7u39e06hrqjfkx4jcy6aqtz6fh3e0yp4j35kdf6euuev0j2u42fkp9t8g8vuf2fjc4nu9ypu0uskefjvh7wkkleqysq04tknxpkhcmjq44ajxsh9zrwvtfer0aw7mlrht0kccmasvsttpxyfy6hazazjdn4vr0xh2dwq2g7q4673ku64xnr5kn49sgarxx5w7te"
+
+  templates:
+    - name: round-trip
+      steps:
+        - - name: pay-b-to-a
+            template: pay
+            arguments:
+              parameters:
+                - {name: from, value: "b"}
+                - {name: to-address, value: "{{workflow.parameters.address-a}}"}
+                - {name: job-suffix, value: "b-to-a"}
+        - - name: pay-a-to-b
+            template: pay
+            arguments:
+              parameters:
+                - {name: from, value: "a"}
+                - {name: to-address, value: "{{workflow.parameters.address-b}}"}
+                - {name: job-suffix, value: "a-to-b"}
+
+    # One hop. The Job is the verdict: it asserts the sender's balance dropped
+    # by exactly amount + fee, so a silent no-op cannot pass.
+    - name: pay
+      inputs:
+        parameters:
+          - name: from
+          - name: to-address
+          - name: job-suffix
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.succeeded > 0
+        failureCondition: status.failed > 0
+        manifest: |
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            generateName: wallet-pay-{{inputs.parameters.job-suffix}}-
+            namespace: {{workflow.parameters.wallet-namespace}}
+            labels:
+              app: wallet-payment
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 3600
+            template:
+              metadata:
+                labels:
+                  app: wallet-payment
+              spec:
+                restartPolicy: Never
+                automountServiceAccountToken: false
+                nodeSelector:
+                  kubernetes.io/hostname: arbei
+                containers:
+                  - name: wallet
+                    image: {{workflow.parameters.wallet-image}}
+                    command: ["/bin/sh", "-c"]
+                    args:
+                      - |
+                        # /bin/sh here is dash: no pipefail.
+                        set -u
+                        W={{inputs.parameters.from}}
+                        D=/wallet-$W
+                        SRV=127.0.0.1:{{workflow.parameters.zaino-port}}
+                        TARGET={{workflow.parameters.zaino-service}}:{{workflow.parameters.zaino-port}}
+                        VALUE={{workflow.parameters.amount-zat}}
+
+                        socat TCP-LISTEN:{{workflow.parameters.zaino-port}},bind=127.0.0.1,fork,reuseaddr \
+                              "TCP:$TARGET" &
+                        sleep 2
+                        echo "PAY from=wallet-$W value=${VALUE}zat target=$TARGET"
+
+                        # Restore only if the volume is empty, so the workflow
+                        # works with cold storage or none at all.
+                        if [ ! -e "$D/id.age" ]; then
+                          echo "wallet-$W: restoring from sealed secret"
+                          if ! printf '%s\n' "$MNEMONIC" | zcash-devtool wallet -w "$D" \
+                               restore-mnemonic --name "wallet-$W" -i "$D/id.age" -n main \
+                               --birthday "$BIRTHDAY" -s "$SRV" > /dev/null 2> "$D/restore.err"; then
+                            echo "wallet-$W: restore FAILED"; tail -n 3 "$D/restore.err"; exit 1
+                          fi
+                        fi
+
+                        # zat_balance <wallet-dir> -> total balance in zatoshis
+                        zat_balance() {
+                          zcash-devtool wallet -w "$1" balance 2>/dev/null \
+                            | sed -E 's/\x1b\[[0-9;]*m//g' \
+                            | awk '/^ *Balance:/ { printf "%.0f\n", $2 * 100000000; exit }'
+                        }
+
+                        S=$(date +%s)
+                        zcash-devtool wallet -w "$D" sync -s "$SRV" > "$D/sync-pre.log" 2>&1
+                        RC=$?
+                        echo "pre-send sync exit=$RC duration_s=$(( $(date +%s) - S ))"
+                        if [ "$RC" -ne 0 ]; then tail -n 5 "$D/sync-pre.log"; exit 1; fi
+
+                        BEFORE=$(zat_balance "$D")
+                        echo "balance_before_zat=$BEFORE"
+
+                        zcash-devtool wallet -w "$D" send \
+                          -i "$D/id.age" \
+                          --address "{{inputs.parameters.to-address}}" \
+                          --value "$VALUE" \
+                          --memo "zaino wallet-payment check" \
+                          --target-note-count 1 \
+                          --min-split-output-value 1000 \
+                          -s "$SRV" 2>&1 | sed -E 's/\x1b\[[0-9;]*m//g' | tee /tmp/send.out
+                        if ! grep -q "Fee rule" /tmp/send.out; then
+                          echo "SEND FAILED (no proposal built)"; exit 1
+                        fi
+
+                        S=$(date +%s)
+                        zcash-devtool wallet -w "$D" sync -s "$SRV" > "$D/sync-post.log" 2>&1
+                        echo "post-send sync exit=$? duration_s=$(( $(date +%s) - S ))"
+
+                        AFTER=$(zat_balance "$D")
+                        SPENT=$(( BEFORE - AFTER ))
+                        echo "balance_after_zat=$AFTER spent_zat=$SPENT"
+
+                        # The sender must be out exactly amount + ZIP-317 fee.
+                        # A no-op or a silently dropped transaction fails here.
+                        FEE=$(( SPENT - VALUE ))
+                        if [ "$SPENT" -le 0 ]; then
+                          echo "ASSERT FAILED: balance did not drop (spent=$SPENT)"; exit 1
+                        fi
+                        if [ "$FEE" -lt 0 ] || [ "$FEE" -gt 100000 ]; then
+                          echo "ASSERT FAILED: implied fee $FEE zat outside expected range"; exit 1
+                        fi
+                        echo "PAY ok: sent=${VALUE}zat fee=${FEE}zat"
+                        echo "WALLET_PAY_COMPLETE"
+                    env:
+                      - name: MNEMONIC
+                        valueFrom:
+                          secretKeyRef:
+                            name: wallet-{{inputs.parameters.from}}
+                            key: mnemonic
+                      - name: BIRTHDAY
+                        valueFrom:
+                          secretKeyRef:
+                            name: wallet-{{inputs.parameters.from}}
+                            key: birthday
+                    resources:
+                      requests:
+                        cpu: "1"
+                        memory: 1Gi
+                      limits:
+                        memory: 4Gi
+                    volumeMounts:
+                      - name: wallet-a
+                        mountPath: /wallet-a
+                      - name: wallet-b
+                        mountPath: /wallet-b
+                volumes:
+                  - name: wallet-a
+                    persistentVolumeClaim:
+                      claimName: wallet-a
+                  - name: wallet-b
+                    persistentVolumeClaim:
+                      claimName: wallet-b

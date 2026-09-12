@@ -13,5 +13,6 @@ resources:
   - update-zaino.yaml
   - cleanup-ephemeral.yaml
   - bench-zaino.yaml
+  - wallet-payment.yaml
   - ephemeral-values.yaml
   - zebra-release-watch.yaml
