@@ -1,0 +1,102 @@
+# Bounds what ztest identities may touch. RBAC cannot: `ztest run` gates on a
+# SelfSubjectAccessReview over every rule the CLI renders, so narrowing the role aborts the run.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: ztest
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      # `*/*` not `*` — bare `*` skips subresources, leaving pods/exec unmatched
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        resources: ["*/*"]
+        operations: [CREATE, UPDATE, DELETE, CONNECT]
+        scope: Namespaced
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["namespaces"]
+        operations: [CREATE, UPDATE, DELETE]
+  matchConditions:
+    - name: ztest-identity
+      expression: >-
+        'ztest-ci' in request.userInfo.groups || request.userInfo.username in
+        ['system:serviceaccount:ztest:ztest-orchestrator',
+         'system:serviceaccount:ztest:ztest-driver']
+  variables:
+    - name: home
+      expression: "['ztest', 'ztest-build', 'ztest-sync', 'ztest-meta', 'ztest-obs', 'ztest-seeds']"
+    - name: isNs
+      expression: "request.resource.group == '' && request.resource.resource == 'namespaces'"
+    # A Namespace request carries its own name in `request.namespace`, hence `isNs` everywhere
+    - name: isPod
+      expression: >-
+        request.resource.group == '' && request.resource.resource == 'pods' &&
+        request.?subResource.orValue('') == '' && request.operation in ['CREATE', 'UPDATE']
+    - name: isRbac
+      expression: >-
+        request.resource.group == 'rbac.authorization.k8s.io' &&
+        request.operation in ['CREATE', 'UPDATE']
+    # role of the namespace written INTO; want/had = role on the Namespace object itself
+    - name: role
+      expression: >-
+        namespaceObject == null || !has(namespaceObject.metadata.labels) ? '' : namespaceObject.metadata.labels[?'ztest.io/role'].orValue('')
+    - name: want
+      expression: >-
+        object == null || !has(object.metadata.labels) ? '' : object.metadata.labels[?'ztest.io/role'].orValue('')
+    - name: had
+      expression: >-
+        oldObject == null || !has(oldObject.metadata.labels) ? '' : oldObject.metadata.labels[?'ztest.io/role'].orValue('')
+    - name: ctrs
+      expression: >-
+        !variables.isPod ? [] : object.spec.containers +
+        object.spec.?initContainers.orValue([]) + object.spec.?ephemeralContainers.orValue([])
+  validations:
+    - expression: >-
+        variables.isNs || request.namespace in variables.home || variables.role == 'test-env'
+      message: ztest may only write in a ztest namespace or one labelled ztest.io/role=test-env
+      reason: Forbidden
+
+    - expression: >-
+        !variables.isNs || (request.operation == 'CREATE' ? variables.want == 'test-env'
+          : request.operation == 'DELETE' ? variables.had == 'test-env'
+          : variables.had == 'test-env' && variables.want == 'test-env')
+      message: ztest may only create, delete or relabel namespaces marked ztest.io/role=test-env
+      reason: Forbidden
+
+    - expression: >-
+        !variables.isPod || (!object.spec.?hostNetwork.orValue(false) &&
+          !object.spec.?hostPID.orValue(false) && !object.spec.?hostIPC.orValue(false) &&
+          object.spec.?volumes.orValue([]).all(v, !has(v.hostPath)) &&
+          variables.ctrs.all(c, c.?ports.orValue([]).all(p, !has(p.hostPort)) &&
+            !c.?securityContext.privileged.orValue(false) &&
+            !c.?securityContext.allowPrivilegeEscalation.orValue(false) &&
+            c.?securityContext.capabilities.add.orValue([]).size() == 0))
+      message: ztest pods may not reach the host or run privileged
+      reason: Forbidden
+
+    # `pods: create` lets a pod name any SA in its namespace and read that token — the
+    # escalation RBAC does not gate
+    - expression: >-
+        !variables.isPod || object.spec.?serviceAccountName.orValue('default') in
+          ['default', 'ztest-orchestrator', 'ztest-driver', 'ztest-buildkit']
+      message: ztest pods may only run as a ztest ServiceAccount
+      reason: Forbidden
+
+    - expression: >-
+        !variables.isRbac || (request.resource.resource == 'rolebindings' &&
+          object.roleRef.kind == 'ClusterRole' && object.roleRef.name == 'ztest-driver' &&
+          object.?subjects.orValue([]).all(s, s.kind == 'ServiceAccount' &&
+            s.name == 'ztest-driver' && s.?namespace.orValue('') == 'ztest'))
+      message: ztest may only bind ClusterRole/ztest-driver to ServiceAccount ztest/ztest-driver
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: ztest
+spec:
+  policyName: ztest
+  # [Deny] to enforce. Staged: this app self-heals, so a bad expression stops every run.
+  validationActions: [Audit, Warn]
