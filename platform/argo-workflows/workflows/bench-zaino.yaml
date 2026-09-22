@@ -12,6 +12,11 @@
 #   argo submit --from workflowtemplate/bench-zaino -n argo \
 #     -p ref=dev -p block-count=3410000 -p tag=full-chain
 #
+#   # provisioner-only read path over the whole chain (no engine/write):
+#   argo submit --from workflowtemplate/bench-zaino -n argo \
+#     -p ref=feat/runtime-on-dev -p binary=provision-bench \
+#     -p block-count=3490000 -p tag=provision-full
+#
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -32,10 +37,12 @@ spec:
         value: "1000"
       - name: rust-log
         value: "sync_bench=info,zaino_sync=trace"
-      # Binary to run: sync-bench (full engine) or provision-bench (provisioner only)
+      # Binary to run: sync-bench (full provisioner → engine → LMDB pipeline) or
+      # provision-bench (provisioner + compact projection only, output drained).
       - name: binary
         value: "sync-bench"
-      # For provision-bench: raw_block, headers_only, headers_spends, current_zaino, all
+      # Reserved for future per-index-set selection; unused by the current bins,
+      # which build the fixed current-zaino set.
       - name: bench-mode
         value: ""
       - name: tag
@@ -164,7 +171,7 @@ spec:
           - --opt
           - context=https://github.com/zingolabs/zaino.git#{{inputs.parameters.ref}}
           - --opt
-          - filename=live-tests/sync-bench/Containerfile
+          - filename=bench/sync-bench/Containerfile
           - --output
           - type=image,name={{inputs.parameters.destination}},push=true
         securityContext:
@@ -228,16 +235,20 @@ spec:
                 containers:
                 - name: bench
                   image: {{inputs.parameters.image}}
+                  # Both bench binaries are fully env-driven (clap `env` fallbacks);
+                  # `command` selects which one runs, no positional args.
                   command: ["{{inputs.parameters.binary}}"]
-                  args:
-                    - "{{inputs.parameters.block-count}}"
-                    - "{{inputs.parameters.concurrency}}"
-                    - "{{inputs.parameters.batch-size}}"
                   env:
                     - name: ZEBRA_STATE_DIR
                       value: /zebra-state
                     - name: ZAINO_DB_PATH
                       value: /data/zaino-bench
+                    - name: SYNC_BLOCKS
+                      value: "{{inputs.parameters.block-count}}"
+                    - name: SYNC_CONCURRENCY
+                      value: "{{inputs.parameters.concurrency}}"
+                    - name: SYNC_BATCH
+                      value: "{{inputs.parameters.batch-size}}"
                     - name: RUST_LOG
                       value: "{{inputs.parameters.rust-log}}"
                     - name: ZAINO_LOG_JSON
