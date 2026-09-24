@@ -120,7 +120,14 @@ spec:
                         W={{inputs.parameters.from}}
                         D=/wallet-$W
                         SRV=127.0.0.1:{{workflow.parameters.zaino-port}}
-                        TARGET={{workflow.parameters.zaino-service}}:{{workflow.parameters.zaino-port}}
+                        # Trailing dot: resolve the Service as an absolute name.
+                        # Without it, ndots:5 sends this 5-dot name through the
+                        # pod's search list first, and on nodes whose resolv.conf
+                        # adds a tailnet suffix that yields a NON-cluster name,
+                        # which CoreDNS forwards upstream. An upstream that
+                        # answers every query (wildcard/hijack) then points this
+                        # at a stranger's IP — a payment run must never do that.
+                        TARGET={{workflow.parameters.zaino-service}}.:{{workflow.parameters.zaino-port}}
                         VALUE={{workflow.parameters.amount-zat}}
 
                         socat TCP-LISTEN:{{workflow.parameters.zaino-port}},bind=127.0.0.1,fork,reuseaddr \
