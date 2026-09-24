@@ -36,3 +36,17 @@ spec:
   resources:
     requests:
       storage: 2Gi
+---
+# The full-sync check restores a wallet and scans the whole mainnet chain, so
+# its DB grows far larger than the payment fixtures' — 20Gi keeps a warm copy.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wallet-devsync-data
+  namespace: wallet-fixtures
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: topolvm-thin
+  resources:
+    requests:
+      storage: 20Gi

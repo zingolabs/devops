@@ -8,3 +8,4 @@ resources:
   - namespace.yaml
   - sealed-wallet-a.yaml
   - sealed-wallet-b.yaml
+  - sealed-wallet-devsync.yaml
