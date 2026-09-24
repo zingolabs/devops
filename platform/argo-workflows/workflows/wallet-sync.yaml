@@ -1,0 +1,171 @@
+# Wallet full-sync check: restore a real mainnet wallet from its seed and sync
+# it genesis->tip through the zaino under test, proving the whole indexing and
+# serving path — block streaming across every pool, the finalised/non-finalised
+# seam, treestate at the tip, and note detection. The seed wallet holds a small
+# shielded balance, so a non-zero balance after sync is the correctness signal:
+# it means the actions were served with correct commitment-tree sizes end to end
+# (a broken tree size livelocks the wallet at the seam instead).
+#
+# Self-contained: it targets any zaino by service DNS, so it works against an
+# ephemeral rc namespace, a golden deploy, or anything else serving the
+# lightwalletd interface.
+#
+# The wallet comes from a SealedSecret in the wallet-fixtures namespace (mnemonic
+# + birthday), so no wallet state is required up front; the PVC only keeps the
+# wallet DB warm between runs. Pass -p wipe=1 to discard it and sync from
+# scratch.
+#
+# Usage:
+#   argo submit --from workflowtemplate/wallet-sync -n argo \
+#     -p zaino-service=zaino.rc1-state-c9d25de.svc.cluster.local
+#   # from scratch:
+#   argo submit --from workflowtemplate/wallet-sync -n argo -p wipe=1 \
+#     -p zaino-service=zaino.rc1-state-c9d25de.svc.cluster.local
+#
+# Timing: a full mainnet sync is long (well over an hour from scratch, faster on
+# a warm PVC). Unlike the wallet-payment header's #1537 note, no raised
+# `[service] timeout` is required against the ports-architecture lightserve
+# stack: it does not enforce the old 120s per-stream cap (verified — both a
+# full sync and a payment round trip ran for many minutes against a zaino with
+# the default `[service] timeout = 30`).
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: wallet-sync
+  namespace: argo
+spec:
+  entrypoint: sync
+  # snapshot-workflow is the SA whose ClusterRoleBinding grants batch/jobs
+  # create+watch cluster-wide, which the `resource: create` step below needs in
+  # the wallet-fixtures namespace.
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: zaino-service
+        value: "zaino.rc1-state-c9d25de.svc.cluster.local"
+      - name: zaino-port
+        value: "8137"
+      - name: wallet-image
+        value: "zot.zot.svc.cluster.local:5000/wallet/zcash-devtool:5a26ee85"
+      - name: wallet-namespace
+        value: "wallet-fixtures"
+      # Set to "1" to wipe the wallet DB and sync from genesis; "0" resumes the
+      # warm PVC.
+      - name: wipe
+        value: "0"
+
+  templates:
+    # One Job, one wallet. The Job is the verdict: sync must exit 0, and the
+    # balance report at the end surfaces the detected note.
+    - name: sync
+      resource:
+        action: create
+        # MUST stay false: the Job runs in wallet-fixtures while the Workflow
+        # lives in argo, and Kubernetes rejects cross-namespace ownerRefs — the
+        # GC deletes the Job seconds after creation (OwnerRefInvalidNamespace).
+        setOwnerReference: false
+        successCondition: status.succeeded > 0
+        failureCondition: status.failed > 0
+        manifest: |
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            generateName: wallet-sync-
+            namespace: {{workflow.parameters.wallet-namespace}}
+            labels:
+              app: wallet-sync
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 21600
+            # No ownerRef means no cascade delete, and generateName makes a new
+            # Job per run, so they clean themselves up a day after finishing.
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  app: wallet-sync
+              spec:
+                restartPolicy: Never
+                automountServiceAccountToken: false
+                nodeSelector:
+                  kubernetes.io/hostname: arbei
+                containers:
+                  - name: wallet
+                    image: {{workflow.parameters.wallet-image}}
+                    command: ["/bin/sh", "-c"]
+                    args:
+                      - |
+                        # /bin/sh here is dash: no pipefail.
+                        set -u
+                        W=/data/wallet
+                        SRV=127.0.0.1:{{workflow.parameters.zaino-port}}
+                        # Trailing dot: resolve the Service as an absolute name.
+                        # Without it, ndots:5 sends this 5-dot name through the
+                        # pod's search list first, and on nodes whose resolv.conf
+                        # adds a tailnet suffix that yields a NON-cluster name,
+                        # which CoreDNS forwards upstream. An upstream that
+                        # answers every query (wildcard/hijack) then points this
+                        # at a stranger's IP.
+                        TARGET={{workflow.parameters.zaino-service}}.:{{workflow.parameters.zaino-port}}
+
+                        socat TCP-LISTEN:{{workflow.parameters.zaino-port}},bind=127.0.0.1,fork,reuseaddr \
+                              "TCP:$TARGET" &
+                        sleep 2
+                        echo "WALLET_SYNC target=$TARGET"
+
+                        if [ "${WIPE:-0}" = "1" ]; then
+                          echo "WALLET_SYNC phase=wipe (sync from genesis)"
+                          rm -rf "$W"
+                        fi
+
+                        # Restore only if the volume is empty, so the workflow
+                        # works with cold storage or none at all.
+                        if [ -e "$W/id.age" ]; then
+                          echo "WALLET_SYNC phase=resume (existing wallet on PVC)"
+                        else
+                          mkdir -p "$W"
+                          echo "WALLET_SYNC phase=restore start=$(date -u +%FT%TZ)"
+                          if ! printf '%s\n' "$MNEMONIC" | zcash-devtool wallet -w "$W" \
+                               restore-mnemonic --name test -i "$W/id.age" -n main \
+                               --birthday "$BIRTHDAY" -s "$SRV" > /dev/null 2> "$W/restore.err"; then
+                            echo "WALLET_SYNC phase=restore result=FAILED"; tail -n 3 "$W/restore.err"; exit 1
+                          fi
+                          echo "WALLET_SYNC phase=restore result=ok"
+                        fi
+
+                        echo "WALLET_SYNC phase=sync start=$(date -u +%FT%TZ)"
+                        S=$(date +%s)
+                        zcash-devtool wallet -w "$W" sync -s "$SRV"
+                        RC=$?
+                        echo "WALLET_SYNC phase=sync end=$(date -u +%FT%TZ) exit=$RC duration_s=$(( $(date +%s) - S ))"
+
+                        zcash-devtool wallet -w "$W" balance 2>/dev/null \
+                          | sed -E 's/\x1b\[[0-9;]*m//g' | sed 's/^ */WALLET_SYNC /'
+
+                        exit "$RC"
+                    env:
+                      - name: WIPE
+                        value: "{{workflow.parameters.wipe}}"
+                      - name: MNEMONIC
+                        valueFrom:
+                          secretKeyRef:
+                            name: wallet-devsync
+                            key: mnemonic
+                      - name: BIRTHDAY
+                        valueFrom:
+                          secretKeyRef:
+                            name: wallet-devsync
+                            key: birthday
+                    resources:
+                      requests:
+                        cpu: "1"
+                        memory: 1Gi
+                      limits:
+                        memory: 4Gi
+                    volumeMounts:
+                      - name: data
+                        mountPath: /data
+                volumes:
+                  - name: data
+                    persistentVolumeClaim:
+                      claimName: wallet-devsync-data
