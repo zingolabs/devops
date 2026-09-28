@@ -37,10 +37,15 @@ spec:
         value: "zaino.rc1-state-c9d25de.svc.cluster.local"
       - name: zaino-port
         value: "8137"
-      # Amount per hop, in zatoshis. The ZIP-317 fee (10000 zat for a simple
-      # shielded spend) is paid on top and asserted separately.
+      # Amount per hop, in zatoshis: the smallest note the receiving wallet can
+      # still spend. zcash_client_sqlite treats any note whose value is at or
+      # below the ZIP-317 marginal fee (5000 zat) as uneconomic and never selects
+      # it, so a smaller amount would strand a dust note in the receiver on
+      # every run. The ZIP-317 fee (10000 zat for a simple shielded spend) is
+      # paid on top and asserted separately; the fee, not the amount, is what
+      # drains the fixture wallets.
       - name: amount-zat
-        value: "20000"
+        value: "5001"
       - name: wallet-image
         value: "zot.zot.svc.cluster.local:5000/wallet/zcash-devtool:5a26ee85"
       - name: wallet-namespace
