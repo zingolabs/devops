@@ -1,0 +1,239 @@
+# Build Zebra Image
+# Builds zebrad from any git ref of any zebra repository using BuildKit
+# (rootless) and pushes it to a registry — the zebra counterpart of
+# build-zaino, so a deploy or a bench can run a validator that is not a
+# published zfnd/zebra tag: a fork branch, a release candidate, a commit.
+#
+# Uses zebra's own docker/Dockerfile (`runtime` target), so the image is the
+# same shape as the official one and the chart runs it unchanged. Cargo and
+# layer caches persist on the buildkit-cache PVC across runs.
+#
+# Prerequisites: the same as build-zaino (docker-registry-creds secret and the
+# buildkit-cache PVC in the argo namespace).
+#
+# Usage:
+#   argo submit --from workflowtemplate/build-zebra -n argo \
+#     -p ref=v6.4.2
+#
+#   argo submit --from workflowtemplate/build-zebra -n argo \
+#     -p repo=https://github.com/nachog00/zebra.git \
+#     -p ref=feat/compact-block-read-v6.3.0
+#
+# Composable — call from other workflows via templateRef (deploy-ephemeral
+# does, when given zebra-ref):
+#   - name: build-zebra
+#     templateRef:
+#       name: build-zebra
+#       template: build
+#     arguments:
+#       parameters:
+#         - name: ref
+#           value: "{{workflow.parameters.zebra-ref}}"
+#
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: build-zebra
+  namespace: argo
+spec:
+  entrypoint: build
+  serviceAccountName: snapshot-workflow
+  arguments:
+    parameters:
+      - name: repo
+        value: https://github.com/ZcashFoundation/zebra.git
+      - name: ref
+        value: v6.4.2
+      # zebra's cargo feature set for the release binary (its Dockerfile's
+      # FEATURES build-arg).
+      - name: features
+        value: "default-release-binaries"
+      - name: registry
+        value: zingodevops/zebra
+      - name: tag
+        value: ""
+      - name: force-build
+        value: "false"
+
+  templates:
+    - name: build
+      inputs:
+        parameters:
+          - name: repo
+            default: https://github.com/ZcashFoundation/zebra.git
+          - name: ref
+            default: v6.4.2
+          - name: features
+            default: "default-release-binaries"
+          - name: registry
+            default: zingodevops/zebra
+          - name: tag
+            default: ""
+          - name: force-build
+            default: "false"
+      steps:
+        - - name: resolve-tag
+            template: resolve-tag
+            arguments:
+              parameters:
+                - name: repo
+                  value: "{{inputs.parameters.repo}}"
+                - name: ref
+                  value: "{{inputs.parameters.ref}}"
+                - name: registry
+                  value: "{{inputs.parameters.registry}}"
+                - name: tag
+                  value: "{{inputs.parameters.tag}}"
+        - - name: check-image
+            template: check-image
+            arguments:
+              parameters:
+                - name: image
+                  value: "{{steps.resolve-tag.outputs.parameters.image}}"
+                - name: force-build
+                  value: "{{inputs.parameters.force-build}}"
+        - - name: build-image
+            template: buildkit
+            when: "{{steps.check-image.outputs.parameters.exists}} == false"
+            arguments:
+              parameters:
+                - name: repo
+                  value: "{{inputs.parameters.repo}}"
+                - name: ref
+                  value: "{{inputs.parameters.ref}}"
+                - name: features
+                  value: "{{inputs.parameters.features}}"
+                - name: destination
+                  value: "{{inputs.parameters.registry}}:{{steps.resolve-tag.outputs.parameters.tag}}"
+      outputs:
+        parameters:
+          - name: image
+            valueFrom:
+              parameter: "{{steps.resolve-tag.outputs.parameters.image}}"
+              default: ""
+          - name: tag
+            valueFrom:
+              parameter: "{{steps.resolve-tag.outputs.parameters.tag}}"
+              default: ""
+
+    # The tag names the ref; a fork gets its owner prefixed so two repos' refs of
+    # the same name cannot collide in one registry.
+    - name: resolve-tag
+      inputs:
+        parameters:
+          - name: repo
+          - name: ref
+          - name: registry
+          - name: tag
+      container:
+        image: busybox
+        command: [sh, -c]
+        args:
+          - |
+            TAG="{{inputs.parameters.tag}}"
+            if [ -z "$TAG" ]; then
+              TAG=$(echo "{{inputs.parameters.ref}}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+              OWNER=$(echo "{{inputs.parameters.repo}}" | sed -E 's#.*github.com/([^/]+)/.*#\1#')
+              if [ -n "$OWNER" ] && [ "$OWNER" != "ZcashFoundation" ]; then
+                TAG="${OWNER}-${TAG}"
+              fi
+            fi
+            IMAGE="{{inputs.parameters.registry}}:${TAG}"
+            echo "Resolved tag: $TAG"
+            echo "Resolved image: $IMAGE"
+            echo -n "$TAG" > /tmp/tag
+            echo -n "$IMAGE" > /tmp/image
+      outputs:
+        parameters:
+          - name: tag
+            valueFrom:
+              path: /tmp/tag
+          - name: image
+            valueFrom:
+              path: /tmp/image
+
+    - name: check-image
+      inputs:
+        parameters:
+          - name: image
+          - name: force-build
+            default: "false"
+      container:
+        image: busybox
+        command: [sh, -c]
+        args:
+          - |
+            if [ "{{inputs.parameters.force-build}}" = "true" ]; then
+              echo "Force build requested — skipping cache check"
+              echo -n "false" > /tmp/exists
+            else
+              REPO=$(echo "{{inputs.parameters.image}}" | cut -d: -f1)
+              TAG=$(echo "{{inputs.parameters.image}}" | cut -d: -f2)
+              if wget -q --spider "https://hub.docker.com/v2/repositories/${REPO}/tags/${TAG}" 2>/dev/null; then
+                echo "Image {{inputs.parameters.image}} found in registry — skipping build"
+                echo -n "true" > /tmp/exists
+              else
+                echo "Image {{inputs.parameters.image}} not in registry — build required"
+                echo -n "false" > /tmp/exists
+              fi
+            fi
+      outputs:
+        parameters:
+          - name: exists
+            valueFrom:
+              path: /tmp/exists
+
+    - name: buildkit
+      inputs:
+        parameters:
+          - name: repo
+          - name: ref
+          - name: features
+            default: "default-release-binaries"
+          - name: destination
+      container:
+        image: moby/buildkit:v0.21.1-rootless
+        env:
+          - name: BUILDKITD_FLAGS
+            value: --oci-worker-no-process-sandbox
+        command:
+          - buildctl-daemonless.sh
+        args:
+          - build
+          - --frontend
+          - gateway.v0
+          - --opt
+          - source=docker/dockerfile
+          - --opt
+          - context={{inputs.parameters.repo}}#{{inputs.parameters.ref}}
+          - --opt
+          - filename=docker/Dockerfile
+          - --opt
+          - target=runtime
+          - --opt
+          - build-arg:FEATURES={{inputs.parameters.features}}
+          - --output
+          - type=image,name={{inputs.parameters.destination}},push=true
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          seccompProfile:
+            type: Unconfined
+          appArmorProfile:
+            type: Unconfined
+        volumeMounts:
+          - name: docker-config
+            mountPath: /home/user/.docker
+            readOnly: true
+          - name: buildkit-cache
+            mountPath: /home/user/.local/share/buildkit
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: docker-registry-creds
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+        - name: buildkit-cache
+          persistentVolumeClaim:
+            claimName: buildkit-cache

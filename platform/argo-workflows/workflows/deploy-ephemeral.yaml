@@ -10,6 +10,13 @@
 #   # From a git ref (builds if needed):
 #   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
 #     -p namespace=bisect-1112 -p ref=760c1ca5
+#   # With a zebra built from a git ref of any zebra repo (build-zebra):
+#   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
+#     -p namespace=zebra-642-rc -p ref=dev -p zebra-ref=v6.4.2
+#   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
+#     -p namespace=zebra-fork -p ref=dev \
+#     -p zebra-repo=https://github.com/nachog00/zebra.git \
+#     -p zebra-ref=feat/compact-block-read-v6.3.0
 #
 #   # With cached zaino + specific zebra version:
 #   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
@@ -45,6 +52,16 @@ spec:
         value: zingodevops/zaino
       - name: zebra-tag
         value: ""
+      # Build and run a zebra from a git ref instead of a published tag
+      # (build-zebra template): any ref of zebra-repo. Overrides zebra-tag.
+      - name: zebra-ref
+        value: ""
+      - name: zebra-repo
+        value: https://github.com/ZcashFoundation/zebra.git
+      - name: zebra-features
+        value: "default-release-binaries"
+      - name: zebra-registry
+        value: zingodevops/zebra
       # Override auto-resolved snapshots (e.g. use pre-NU6.2 snapshot for older zaino)
       - name: zebra-snapshot
         value: ""
@@ -122,6 +139,25 @@ spec:
                   value: ""
                 - name: force-build
                   value: "{{workflow.parameters.force-build}}"
+          - name: build-zebra
+            when: "'{{workflow.parameters.zebra-ref}}' != ''"
+            templateRef:
+              name: build-zebra
+              template: build
+            arguments:
+              parameters:
+                - name: repo
+                  value: "{{workflow.parameters.zebra-repo}}"
+                - name: ref
+                  value: "{{workflow.parameters.zebra-ref}}"
+                - name: features
+                  value: "{{workflow.parameters.zebra-features}}"
+                - name: registry
+                  value: "{{workflow.parameters.zebra-registry}}"
+                - name: tag
+                  value: ""
+                - name: force-build
+                  value: "{{workflow.parameters.force-build}}"
         - - name: create-namespace
             template: ensure-namespace
             arguments:
@@ -158,6 +194,8 @@ spec:
               parameters:
                 - name: image
                   value: "{{steps.build-image.outputs.parameters.image}}"
+                - name: zebra-image
+                  value: "{{steps.build-zebra.outputs.parameters.image}}"
         - - name: fix-permissions
             template: fix-permissions
             # Skip in state mode: this hardcodes chown 1000, but state-mode zaino runs
@@ -326,6 +364,9 @@ spec:
         parameters:
           - name: image
             default: ""
+          # A zebra image built from zebra-ref (repository:tag), or empty.
+          - name: zebra-image
+            default: ""
       container:
         image: alpine/helm:latest
         command: [sh, -c]
@@ -380,7 +421,12 @@ spec:
               OVERRIDES="$OVERRIDES --set zaino.image.tag=$ZAINO_TAG"
             fi
 
-            if [ -n "$ZEBRA_TAG" ]; then
+            # A zebra built from a ref wins over a published tag: both halves of
+            # the image name come from the build.
+            ZEBRA_IMAGE="{{inputs.parameters.zebra-image}}"
+            if [ -n "$ZEBRA_IMAGE" ]; then
+              OVERRIDES="$OVERRIDES --set zebra.image.repository=${ZEBRA_IMAGE%%:*} --set zebra.image.tag=${ZEBRA_IMAGE##*:}"
+            elif [ -n "$ZEBRA_TAG" ]; then
               OVERRIDES="$OVERRIDES --set zebra.image.tag=$ZEBRA_TAG"
             fi
 
