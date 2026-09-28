@@ -6,6 +6,7 @@ resources:
   - snapshot-golden.yaml
   - seed-zebra-state-cache.yaml
   - build-zaino.yaml
+  - build-zebra.yaml
   - buildkit-cache-pvc.yaml
   - deploy-ephemeral.yaml
   - deploy-tryout.yaml
