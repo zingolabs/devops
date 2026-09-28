@@ -1,0 +1,28 @@
+# Golden mainnet zebra on the tailnet: RPC upstream for off-cluster zaino (infra/zaino), P2P
+# sync source for ztest's mainnet zebras (office egress IP is held by these zebras' peers)
+#
+# - separate Service (zcash-stack chart has no zebra.service.annotations)
+# - zebra RPC = no cookie auth (chart-hardcoded) → tailnet ACL = only access control
+# - every tailnet client reaches P2P from this proxy's one IP → golden-mainnet's
+#   `maxConnectionsPerIp` must exceed 1
+apiVersion: v1
+kind: Service
+metadata:
+  name: zebra-tailnet
+  namespace: golden-mainnet
+  annotations:
+    tailscale.com/expose: "true"
+    tailscale.com/hostname: golden-mainnet-zebra
+spec:
+  type: ClusterIP
+  selector:
+    app: zebra
+  ports:
+    - name: rpc
+      port: 8232
+      targetPort: 8232
+      protocol: TCP
+    - name: p2p
+      port: 8233
+      targetPort: 8233
+      protocol: TCP
