@@ -21,7 +21,7 @@ zebra:
   service:
     # Expose zebra P2P (8233) in-cluster so golden-zebra-state can peer with it.
     p2p: true
-  # Tailnet P2P clients (ztest zebras) all arrive from the zebra-tailnet proxy's one IP; the
+  # Tailnet P2P clients (ztest zebras, via the zebra-p2p NodePort) arrive from few IPs; the
   # default of 1 would serve one of them at a time. Needs zcash-stack >= 0.0.26.
   maxConnectionsPerIp: 8
 
