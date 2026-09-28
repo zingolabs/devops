@@ -18,6 +18,10 @@
 #     -p zebra-repo=https://github.com/nachog00/zebra.git \
 #     -p zebra-ref=feat/compact-block-read-v6.3.0
 #
+#   # A zebra alone, no zaino — a validator to bench against:
+#   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
+#     -p namespace=zebra-642 -p zaino-enabled=false -p zebra-ref=v6.4.2
+#
 #   # With cached zaino + specific zebra version:
 #   argo submit --from workflowtemplate/deploy-ephemeral -n argo \
 #     -p namespace=test-cached -p zaino-tag=0.4.0-rc.2-no-tls \
@@ -62,6 +66,10 @@ spec:
         value: "default-release-binaries"
       - name: zebra-registry
         value: zingodevops/zebra
+      # "false" deploys the zebra alone (chart zaino.enabled=false): a validator
+      # to bench or to point another zaino at, with no index beside it.
+      - name: zaino-enabled
+        value: "true"
       # Override auto-resolved snapshots (e.g. use pre-NU6.2 snapshot for older zaino)
       - name: zebra-snapshot
         value: ""
@@ -410,6 +418,10 @@ spec:
               OVERRIDES="$OVERRIDES --set-string zaino.logging.level={{workflow.parameters.state-log-level}}"
             fi
 
+            if [ "{{workflow.parameters.zaino-enabled}}" = "false" ]; then
+              OVERRIDES="$OVERRIDES --set zaino.enabled=false"
+            fi
+
             # Resolve zaino image: built image takes precedence over zaino-tag
             # Guard against unresolved Argo template expressions from skipped steps
             case "$BUILT_IMAGE" in *"{{"*) BUILT_IMAGE="" ;; esac
@@ -424,6 +436,7 @@ spec:
             # A zebra built from a ref wins over a published tag: both halves of
             # the image name come from the build.
             ZEBRA_IMAGE="{{inputs.parameters.zebra-image}}"
+            case "$ZEBRA_IMAGE" in *"{{"*) ZEBRA_IMAGE="" ;; esac
             if [ -n "$ZEBRA_IMAGE" ]; then
               OVERRIDES="$OVERRIDES --set zebra.image.repository=${ZEBRA_IMAGE%%:*} --set zebra.image.tag=${ZEBRA_IMAGE##*:}"
             elif [ -n "$ZEBRA_TAG" ]; then
