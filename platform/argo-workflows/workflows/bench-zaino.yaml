@@ -6,7 +6,11 @@
 # (the read-path ceiling), `sync` runs the full provisioner → engine → LMDB
 # pipeline, `both` runs the two over one window and attributes the bottleneck.
 # `bench-adapter` picks the source: `readstate` opens the mounted state DB,
-# `rpc` reaches the validator's JSON-RPC (`zebra-rpc-addr`).
+# `rpc` reaches the validator's JSON-RPC (`zebra-rpc-addr`). `bench-strategy`
+# picks what is fetched per height: `compact` (the fork's pre-index compact
+# block, which a stock zebra does not serve) or `full` (whole blocks over
+# `getblock`, which any zebra answers). `start-height` pins the window's first
+# height, so a band such as the 2022 sandblast can be measured on its own.
 #
 # Usage:
 #   argo submit --from workflowtemplate/bench-zaino -n argo \
@@ -24,6 +28,12 @@
 #   argo submit --from workflowtemplate/bench-zaino -n argo \
 #     -p ref=feat/runtime-on-dev -p bench-mode=provision -p bench-adapter=rpc \
 #     -p block-count=3490000 -p tag=provision-full-rpc
+#
+#   # a stock zebra in another namespace, full blocks, one 100k band:
+#   argo submit --from workflowtemplate/bench-zaino -n argo \
+#     -p ref=feat/runtime-on-dev -p bench-mode=provision -p bench-adapter=rpc \
+#     -p bench-strategy=full -p zebra-rpc-addr=zebra.zebra-642.svc:8232 \
+#     -p start-height=1700000 -p block-count=100000 -p tag=v642-sandblast
 #
 # An empty block-count means "to the source's tip".
 #
@@ -60,6 +70,13 @@ spec:
       # The validator's JSON-RPC, for `bench-adapter=rpc`.
       - name: zebra-rpc-addr
         value: "zebra.golden-zebra-state.svc:8232"
+      # compact | full. Empty keeps the binary's default (compact).
+      - name: bench-strategy
+        value: "compact"
+      # First height of the window. Empty: genesis for provision/both, the
+      # backend's watermark for sync.
+      - name: start-height
+        value: ""
       - name: tag
         value: ""
       - name: target-namespace
@@ -95,6 +112,10 @@ spec:
             default: "readstate"
           - name: zebra-rpc-addr
             default: "zebra.golden-zebra-state.svc:8232"
+          - name: bench-strategy
+            default: "compact"
+          - name: start-height
+            default: ""
           - name: tag
             default: ""
           - name: target-namespace
@@ -142,6 +163,10 @@ spec:
                   value: "{{inputs.parameters.bench-adapter}}"
                 - name: zebra-rpc-addr
                   value: "{{inputs.parameters.zebra-rpc-addr}}"
+                - name: bench-strategy
+                  value: "{{inputs.parameters.bench-strategy}}"
+                - name: start-height
+                  value: "{{inputs.parameters.start-height}}"
                 - name: target-namespace
                   value: "{{inputs.parameters.target-namespace}}"
                 - name: node
@@ -234,6 +259,8 @@ spec:
           - name: bench-mode
           - name: bench-adapter
           - name: zebra-rpc-addr
+          - name: bench-strategy
+          - name: start-height
           - name: target-namespace
           - name: node
           - name: zebra-hostpath
@@ -287,6 +314,10 @@ spec:
                       value: "{{inputs.parameters.bench-adapter}}"
                     - name: ZEBRA_RPC_ADDR
                       value: "{{inputs.parameters.zebra-rpc-addr}}"
+                    - name: BENCH_STRATEGY
+                      value: "{{inputs.parameters.bench-strategy}}"
+                    - name: SYNC_START
+                      value: "{{inputs.parameters.start-height}}"
                   volumeMounts:
                     - mountPath: /zebra-state
                       name: zebra-state
