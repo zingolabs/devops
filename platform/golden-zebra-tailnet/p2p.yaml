@@ -2,7 +2,8 @@
 #
 # - NodePort on the node's own tailscaled (direct path) over the operator proxy (hard NAT → DERP;
 #   zebra = 1 request in flight per peer, so relay RTT starves checkpoint sync)
-# - every client arrives from few IPs → golden-mainnet's `maxConnectionsPerIp` must exceed 1
+# - `Local` keeps each client's tailnet IP (`Cluster` SNATs all to the node gateway → zebra's
+#   1-connection-per-IP limit = one client for everyone); zebra-0 pinned to tekau by its volume
 apiVersion: v1
 kind: Service
 metadata:
@@ -10,6 +11,7 @@ metadata:
   namespace: golden-mainnet
 spec:
   type: NodePort
+  externalTrafficPolicy: Local
   selector:
     app: zebra
   ports:
