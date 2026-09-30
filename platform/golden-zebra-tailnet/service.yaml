@@ -1,4 +1,4 @@
-# Golden mainnet zebra RPC on the tailnet: upstream for off-cluster zaino (infra/zaino)
+# Golden mainnet zebra RPC on the tailnet: upstream for off-cluster zaino (zingolabs/zaino-prod)
 #
 # - separate Service (zcash-stack chart has no zebra.service.annotations)
 # - zebra RPC = no cookie auth (chart-hardcoded) → tailnet ACL = only access control

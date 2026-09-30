@@ -72,7 +72,13 @@ grafana:
 
 # Prometheus
 prometheus:
+  # Remote-write target for off-cluster zaino nodes (tailnet ACL = only access control)
+  service:
+    annotations:
+      tailscale.com/expose: "true"
+      tailscale.com/hostname: prometheus
   prometheusSpec:
+    enableRemoteWriteReceiver: true
     retention: 15d
     retentionSize: 50GB
     resources:
