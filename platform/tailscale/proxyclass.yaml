@@ -1,0 +1,14 @@
+# Default for every operator proxy (proxyConfig.defaultProxyClass in kustomization.yaml)
+# - TS_DEBUG_MTU = pod MTU 1230 (flannel VXLAN over tailscale0: 1280 − 50) − 80 wireguard overhead
+# - default 1280 → 1360-byte wire packets, fragmented on the pod network → bulk TCP crawls
+apiVersion: tailscale.com/v1alpha1
+kind: ProxyClass
+metadata:
+  name: pod-network-mtu
+spec:
+  statefulSet:
+    pod:
+      tailscaleContainer:
+        env:
+          - name: TS_DEBUG_MTU
+            value: "1150"

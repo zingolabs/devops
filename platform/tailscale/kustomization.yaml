@@ -5,6 +5,7 @@ namespace: tailscale
 
 resources:
   - namespace.yaml
+  - proxyclass.yaml
 
 helmCharts:
   - name: tailscale-operator
@@ -22,3 +23,11 @@ helmCharts:
       # bound to ztest's own run role by platform/ztest-ci.
       apiServerProxyConfig:
         mode: "true"
+
+      # Proxies + the operator's own API-server proxy sit on the 1230-MTU pod network (proxyclass.yaml)
+      proxyConfig:
+        defaultProxyClass: pod-network-mtu
+      operatorConfig:
+        extraEnv:
+          - name: TS_DEBUG_MTU
+            value: "1150"
