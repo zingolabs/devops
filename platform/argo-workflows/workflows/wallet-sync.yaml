@@ -26,8 +26,11 @@
 #   argo submit --from workflowtemplate/wallet-sync -n argo \
 #     -p zaino-service=zaino.rc1-state-c9d25de.svc.cluster.local
 #
-# Timing: a full mainnet sync from the birthday takes roughly half an hour
-# against a colocated zaino. Unlike the wallet-payment header's #1537 note, no raised
+# Timing: a sync from the birthday took 7 min against a colocated zaino
+# (light-wallet-local, 2026-10-14), and 70 min for the same wallet across nodes.
+#
+# The wallet image is built from images/zcash-devtool/ (Dockerfile plus a
+# one-off buildkit Job that pushes it to the in-cluster registry). Unlike the wallet-payment header's #1537 note, no raised
 # `[service] timeout` is required against the ports-architecture lightserve
 # stack: it does not enforce the old 120s per-stream cap (verified — both a
 # full sync and a payment round trip ran for many minutes against a zaino with
