@@ -1,0 +1,66 @@
+# One-off build of the wallet image the wallet-sync and wallet-payment workflows
+# run, pushed to the in-cluster registry. Runs on tekau, which has the outbound
+# access the build needs (git clone, crates.io). zot accepts OCI manifests only,
+# hence oci-mediatypes=true.
+#
+#   kubectl create configmap devtool-dockerfile -n argo \
+#     --from-file=Dockerfile=images/zcash-devtool/Dockerfile
+#   kubectl create -f images/zcash-devtool/build-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: build-zcash-devtool-
+  namespace: argo
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 7200
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/buildkit: unconfined
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/hostname: tekau
+      containers:
+        - name: buildkit
+          image: moby/buildkit:v0.21.1-rootless
+          command: ["buildctl-daemonless.sh"]
+          args:
+            - build
+            - --frontend
+            - dockerfile.v0
+            - --local
+            - context=/build
+            - --local
+            - dockerfile=/build
+            - --output
+            - type=image,name=zot.zot.svc.cluster.local:5000/wallet/zcash-devtool:5a26ee85,push=true,registry.insecure=true,oci-mediatypes=true
+          env:
+            - name: BUILDKITD_FLAGS
+              value: --oci-worker-no-process-sandbox
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: Unconfined
+            appArmorProfile:
+              type: Unconfined
+          resources:
+            requests:
+              cpu: "4"
+              memory: 4Gi
+            limits:
+              memory: 12Gi
+          volumeMounts:
+            - name: build
+              mountPath: /build
+            - name: state
+              mountPath: /home/user/.local/share/buildkit
+      volumes:
+        - name: build
+          configMap:
+            name: devtool-dockerfile
+        - name: state
+          emptyDir: {}
