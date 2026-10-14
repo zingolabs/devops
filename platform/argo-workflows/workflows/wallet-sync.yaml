@@ -11,19 +11,23 @@
 # lightwalletd interface.
 #
 # The wallet comes from a SealedSecret in the wallet-fixtures namespace (mnemonic
-# + birthday), so no wallet state is required up front; the PVC only keeps the
-# wallet DB warm between runs. Pass -p wipe=1 to discard it and sync from
-# scratch.
+# + birthday), so no wallet state is required up front. Every run restores the
+# wallet from its seed and syncs it from the birthday: the wallet DB lives in an
+# emptyDir, because the wallet runs on whichever node the target zaino runs on
+# and a node-local volume cannot follow it there.
+#
+# Colocation: the Job carries a required pod affinity to the target's zaino pod
+# (label `app=zaino` in the namespace named by the service's second DNS label),
+# so the wallet always schedules onto that pod's node. Across nodes the wallet's
+# block stream crosses the inter-node link, which measured ~0.3 MB/s against
+# sub-second on the same node, and the sync then times the network, not zaino.
 #
 # Usage:
 #   argo submit --from workflowtemplate/wallet-sync -n argo \
 #     -p zaino-service=zaino.rc1-state-c9d25de.svc.cluster.local
-#   # from scratch:
-#   argo submit --from workflowtemplate/wallet-sync -n argo -p wipe=1 \
-#     -p zaino-service=zaino.rc1-state-c9d25de.svc.cluster.local
 #
-# Timing: a full mainnet sync is long (well over an hour from scratch, faster on
-# a warm PVC). Unlike the wallet-payment header's #1537 note, no raised
+# Timing: a full mainnet sync from the birthday takes roughly half an hour
+# against a colocated zaino. Unlike the wallet-payment header's #1537 note, no raised
 # `[service] timeout` is required against the ports-architecture lightserve
 # stack: it does not enforce the old 120s per-stream cap (verified — both a
 # full sync and a payment round trip ran for many minutes against a zaino with
@@ -49,10 +53,10 @@ spec:
         value: "zot.zot.svc.cluster.local:5000/wallet/zcash-devtool:5a26ee85"
       - name: wallet-namespace
         value: "wallet-fixtures"
-      # Set to "1" to wipe the wallet DB and sync from genesis; "0" resumes the
-      # warm PVC.
+      # Accepted for compatibility with existing callers and ignored: the wallet
+      # DB is an emptyDir, so every run already syncs from scratch.
       - name: wipe
-        value: "0"
+        value: "1"
 
   templates:
     # One Job, one wallet. The Job is the verdict: sync must exit 0, and the
@@ -87,8 +91,19 @@ spec:
               spec:
                 restartPolicy: Never
                 automountServiceAccountToken: false
-                nodeSelector:
-                  kubernetes.io/hostname: arbei
+                # Run on the target zaino's node. The namespace is the second
+                # label of the service DNS name (zaino.<ns>.svc.cluster.local).
+                # Required, not preferred: a wallet that lands elsewhere measures
+                # the inter-node link, so it is better left Pending.
+                affinity:
+                  podAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - topologyKey: kubernetes.io/hostname
+                        namespaces:
+                          - "{{=sprig.splitList('.', workflow.parameters['zaino-service'])[1]}}"
+                        labelSelector:
+                          matchLabels:
+                            app: zaino
                 containers:
                   - name: wallet
                     image: {{workflow.parameters.wallet-image}}
@@ -113,25 +128,17 @@ spec:
                         sleep 2
                         echo "WALLET_SYNC target=$TARGET"
 
-                        if [ "${WIPE:-0}" = "1" ]; then
-                          echo "WALLET_SYNC phase=wipe (sync from genesis)"
-                          rm -rf "$W"
+                        # The data volume is an emptyDir, so every run restores
+                        # the wallet from its seed.
+                        echo "WALLET_SYNC node=$NODE_NAME"
+                        mkdir -p "$W"
+                        echo "WALLET_SYNC phase=restore start=$(date -u +%FT%TZ)"
+                        if ! printf '%s\n' "$MNEMONIC" | zcash-devtool wallet -w "$W" \
+                             restore-mnemonic --name test -i "$W/id.age" -n main \
+                             --birthday "$BIRTHDAY" -s "$SRV" > /dev/null 2> "$W/restore.err"; then
+                          echo "WALLET_SYNC phase=restore result=FAILED"; tail -n 3 "$W/restore.err"; exit 1
                         fi
-
-                        # Restore only if the volume is empty, so the workflow
-                        # works with cold storage or none at all.
-                        if [ -e "$W/id.age" ]; then
-                          echo "WALLET_SYNC phase=resume (existing wallet on PVC)"
-                        else
-                          mkdir -p "$W"
-                          echo "WALLET_SYNC phase=restore start=$(date -u +%FT%TZ)"
-                          if ! printf '%s\n' "$MNEMONIC" | zcash-devtool wallet -w "$W" \
-                               restore-mnemonic --name test -i "$W/id.age" -n main \
-                               --birthday "$BIRTHDAY" -s "$SRV" > /dev/null 2> "$W/restore.err"; then
-                            echo "WALLET_SYNC phase=restore result=FAILED"; tail -n 3 "$W/restore.err"; exit 1
-                          fi
-                          echo "WALLET_SYNC phase=restore result=ok"
-                        fi
+                        echo "WALLET_SYNC phase=restore result=ok"
 
                         echo "WALLET_SYNC phase=sync start=$(date -u +%FT%TZ)"
                         S=$(date +%s)
@@ -144,8 +151,10 @@ spec:
 
                         exit "$RC"
                     env:
-                      - name: WIPE
-                        value: "{{workflow.parameters.wipe}}"
+                      - name: NODE_NAME
+                        valueFrom:
+                          fieldRef:
+                            fieldPath: spec.nodeName
                       - name: MNEMONIC
                         valueFrom:
                           secretKeyRef:
@@ -167,5 +176,5 @@ spec:
                         mountPath: /data
                 volumes:
                   - name: data
-                    persistentVolumeClaim:
-                      claimName: wallet-devsync-data
+                    emptyDir:
+                      sizeLimit: 20Gi
