@@ -7,8 +7,15 @@
 # lightwalletd interface. Wiring it to the rc gate is a separate step.
 #
 # Wallets come from SealedSecrets in the wallet-fixtures namespace (mnemonic +
-# birthday), so no wallet state is required up front; the PVCs only keep the
-# wallet DB warm between runs.
+# birthday), so no wallet state is required up front. Each hop restores its
+# sending wallet from the seed into an emptyDir and syncs it from the birthday:
+# the wallet runs on whichever node the target zaino runs on, and a node-local
+# volume cannot follow it there.
+#
+# Colocation: each Job carries a required pod affinity to the target's zaino pod
+# (label `app=zaino` in the namespace named by the service's second DNS label),
+# the same rule as wallet-sync. Across nodes the block stream crosses the
+# inter-node link and a sync then times the network, not zaino.
 #
 # Usage:
 #   argo submit --from workflowtemplate/wallet-payment -n argo \
@@ -112,8 +119,19 @@ spec:
               spec:
                 restartPolicy: Never
                 automountServiceAccountToken: false
-                nodeSelector:
-                  kubernetes.io/hostname: arbei
+                # Run on the target zaino's node. The namespace is the second
+                # label of the service DNS name (zaino.<ns>.svc.cluster.local).
+                # Required, not preferred: a wallet that lands elsewhere measures
+                # the inter-node link, so it is better left Pending.
+                affinity:
+                  podAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - topologyKey: kubernetes.io/hostname
+                        namespaces:
+                          - "{{=sprig.splitList('.', workflow.parameters['zaino-service'])[1]}}"
+                        labelSelector:
+                          matchLabels:
+                            app: zaino
                 containers:
                   - name: wallet
                     image: {{workflow.parameters.wallet-image}}
@@ -138,10 +156,11 @@ spec:
                         socat TCP-LISTEN:{{workflow.parameters.zaino-port}},bind=127.0.0.1,fork,reuseaddr \
                               "TCP:$TARGET" &
                         sleep 2
-                        echo "PAY from=wallet-$W value=${VALUE}zat target=$TARGET"
+                        echo "PAY from=wallet-$W value=${VALUE}zat target=$TARGET node=$NODE_NAME"
 
-                        # Restore only if the volume is empty, so the workflow
-                        # works with cold storage or none at all.
+                        # The wallet directory is an emptyDir, so every hop
+                        # restores its wallet from the seed.
+                        mkdir -p "$D"
                         if [ ! -e "$D/id.age" ]; then
                           echo "wallet-$W: restoring from sealed secret"
                           if ! printf '%s\n' "$MNEMONIC" | zcash-devtool wallet -w "$D" \
@@ -199,6 +218,10 @@ spec:
                         echo "PAY ok: sent=${VALUE}zat fee=${FEE}zat"
                         echo "WALLET_PAY_COMPLETE"
                     env:
+                      - name: NODE_NAME
+                        valueFrom:
+                          fieldRef:
+                            fieldPath: spec.nodeName
                       - name: MNEMONIC
                         valueFrom:
                           secretKeyRef:
@@ -222,8 +245,8 @@ spec:
                         mountPath: /wallet-b
                 volumes:
                   - name: wallet-a
-                    persistentVolumeClaim:
-                      claimName: wallet-a
+                    emptyDir:
+                      sizeLimit: 20Gi
                   - name: wallet-b
-                    persistentVolumeClaim:
-                      claimName: wallet-b
+                    emptyDir:
+                      sizeLimit: 20Gi
