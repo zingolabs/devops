@@ -9,7 +9,7 @@ zebra:
   testnet: false
   replicas: 1
   image:
-    tag: "6.3.0"
+    tag: "7.0.0"
     hash: ""
   # Plan-1 chart hook: back the state cache with a hostPath dir (omits the PVC).
   volumes:
